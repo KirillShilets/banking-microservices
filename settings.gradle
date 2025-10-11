@@ -1,0 +1,8 @@
+rootProject.name = 'spring-cloud-banking-system'
+include 'account-service'
+include 'bill-service'
+include 'deposit-service'
+include 'config-service'
+include 'gateway-service'
+include 'notification-service'
+include 'discovery-service'
