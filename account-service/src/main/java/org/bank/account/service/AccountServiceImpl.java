@@ -1,9 +1,8 @@
 package org.bank.account.service;
 
+import org.bank.exception.NotFoundException;
 import org.bank.account.entity.Account;
-import org.bank.account.exception.AccountNotFoundException;
 import org.bank.account.repository.AccountRepository;
-import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +21,7 @@ public class AccountServiceImpl implements AccountService {
 
     public Account getAccountById(Long accountId) {
         return accountRepository.findById(accountId)
-                .orElseThrow(() -> new AccountNotFoundException("Unable to find account with id: " + accountId));
+                .orElseThrow(() -> new NotFoundException("Unable to find account with id: " + accountId));
     }
 
     public Long createAccount(String name, String email, String phone, List<Long> bills) {
@@ -44,7 +43,7 @@ public class AccountServiceImpl implements AccountService {
 
     public Account deleteAccount(Long accountId) {
         Account deletedAccount = accountRepository.findAccountWithBills(accountId)
-                .orElseThrow(() -> new AccountNotFoundException("Unable to find account with id: " + accountId));
+                .orElseThrow(() -> new NotFoundException("Unable to find account with id: " + accountId));
         accountRepository.delete(deletedAccount);
         return deletedAccount;
     }
