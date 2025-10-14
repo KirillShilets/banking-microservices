@@ -2,9 +2,11 @@ package org.bank.deposit.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bank.exception.BadRequestException;
+import org.bank.exception.InternalServerException;
+import org.bank.exception.NotFoundException;
 import org.bank.deposit.controller.dto.DepositResponseDTO;
 import org.bank.deposit.entity.Deposit;
-import org.bank.deposit.exception.DepositServiceException;
 import org.bank.deposit.repository.DepositRepository;
 import org.bank.deposit.rest.AccountServiceClient;
 import org.bank.deposit.rest.BillServiceClient;
@@ -40,7 +42,7 @@ public class DepositService {
 
     public DepositResponseDTO deposit(Long accountId, Long billId, BigDecimal amount) {
         if(accountId == null && billId == null) {
-            throw new DepositServiceException("Account ID and Bill ID cannot be null");
+            throw new BadRequestException("Account ID and Bill ID cannot be null");
         }
 
         if(billId != null) {
@@ -69,7 +71,7 @@ public class DepositService {
             rabbitTemplate.convertAndSend(DEPOSIT_EXCHANGE, DEPOSIT_ROUTING_KEY, objectMapper.writeValueAsString(depositResponseDTO));
         } catch (JsonProcessingException e) {
             e.printStackTrace();
-            throw new DepositServiceException("Error while sending deposit to Rabbit");
+            throw new InternalServerException("Error while sending deposit to Rabbit");
         }
 
         return depositResponseDTO;
@@ -90,6 +92,6 @@ public class DepositService {
         return billServiceClient.getBillsByAccountId(accountId).stream()
                 .filter(BillResponseDTO::getIsDefault)
                 .findAny()
-                .orElseThrow(() -> new DepositServiceException("Deposit not found"));
+                .orElseThrow(() -> new NotFoundException("Deposit not found"));
     }
 }
