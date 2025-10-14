@@ -1,7 +1,7 @@
 package org.bank.bill.service;
 
+import org.bank.exception.NotFoundException;
 import org.bank.bill.entity.Bill;
-import org.bank.bill.exception.BillNotFoundException;
 import org.bank.bill.repository.BillRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ public class BillService {
 
     public Bill getBillById(Long billId) {
         return billRepository.findById(billId)
-                .orElseThrow(() -> new BillNotFoundException("Unable to find bill with id: " + billId));
+                .orElseThrow(() -> new NotFoundException("Unable to find bill with id: " + billId));
     }
 
     public Long createBill(Long accountId, BigDecimal amount,

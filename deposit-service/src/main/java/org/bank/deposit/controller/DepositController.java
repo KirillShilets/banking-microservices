@@ -1,5 +1,6 @@
 package org.bank.deposit.controller;
 
+import jakarta.validation.Valid;
 import org.bank.deposit.controller.dto.DepositRequestDTO;
 import org.bank.deposit.controller.dto.DepositResponseDTO;
 import org.bank.deposit.service.DepositService;
@@ -17,7 +18,7 @@ public class DepositController {
     }
 
     @PostMapping("/deposits")
-    public DepositResponseDTO deposit(@RequestBody DepositRequestDTO depositRequestDTO) {
+    public DepositResponseDTO deposit(@Valid @RequestBody DepositRequestDTO depositRequestDTO) {
         return depositService.deposit(depositRequestDTO.getAccountId(), depositRequestDTO.getBillId(),
                 depositRequestDTO.getAmount());
     }

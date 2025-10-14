@@ -1,5 +1,6 @@
 package org.bank.bill.controller;
 
+import jakarta.validation.Valid;
 import org.bank.bill.controller.dto.BillRequestDTO;
 import org.bank.bill.controller.dto.BillResponseDTO;
 import org.bank.bill.service.BillService;
@@ -26,13 +27,13 @@ public class BillController {
     }
 
     @PostMapping()
-    public Long createBill(@RequestBody BillRequestDTO billRequestDTO) {
+    public Long createBill(@Valid @RequestBody BillRequestDTO billRequestDTO) {
         return billService.createBill(billRequestDTO.getAccountId(), billRequestDTO.getAmount(),
                 billRequestDTO.getIsDefault(), billRequestDTO.getOverdraftEnabled());
     }
 
     @PutMapping("/{billId}")
-    public BillResponseDTO updateBill(@PathVariable Long billId, @RequestBody BillRequestDTO billRequestDTO) {
+    public BillResponseDTO updateBill(@PathVariable Long billId, @Valid @RequestBody BillRequestDTO billRequestDTO) {
         return new BillResponseDTO(billService.updateBill(billId,billRequestDTO.getAccountId(),
                 billRequestDTO.getAmount(), billRequestDTO.getIsDefault(), billRequestDTO.getOverdraftEnabled()));
     }

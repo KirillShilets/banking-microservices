@@ -1,5 +1,6 @@
 package org.bank.account.controller;
 
+import jakarta.validation.Valid;
 import org.bank.account.controller.dto.AccountRequestDTO;
 import org.bank.account.controller.dto.AccountResponseDTO;
 import org.bank.account.service.AccountService;
@@ -24,14 +25,14 @@ public class AccountController {
     }
 
     @PostMapping()
-    public Long createAccount(@RequestBody AccountRequestDTO accountRequestDTO) {
+    public Long createAccount(@Valid @RequestBody AccountRequestDTO accountRequestDTO) {
         return accountService.createAccount(accountRequestDTO.getName(), accountRequestDTO.getEmail(),
                 accountRequestDTO.getPhone(), accountRequestDTO.getBills());
     }
 
     @PutMapping("/{accountId}")
     public AccountResponseDTO updateAccount(@PathVariable Long accountId,
-                                            @RequestBody AccountRequestDTO accountRequestDTO) {
+                                            @Valid @RequestBody AccountRequestDTO accountRequestDTO) {
         return new AccountResponseDTO(accountService.updateAccount(accountId,
                 accountRequestDTO.getName(), accountRequestDTO.getEmail(),
                 accountRequestDTO.getPhone(), accountRequestDTO.getBills()));
