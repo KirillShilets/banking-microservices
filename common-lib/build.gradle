@@ -1,0 +1,26 @@
+plugins {
+    id 'java-library'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'org.bank'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:3.5.6"
+    }
+}
+
+dependencies {
+    implementation 'com.fasterxml.jackson.core:jackson-annotations'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+test {
+    useJUnitPlatform()
+}
