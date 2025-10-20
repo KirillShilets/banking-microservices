@@ -26,7 +26,11 @@ public class GlobalWebFluxExceptionHandler implements ErrorWebExceptionHandler {
         String message = "Internal Server Error";
 
         if (ex instanceof ResponseStatusException rse) {
-            status = HttpStatus.NOT_FOUND;
+            if (rse.getStatusCode() instanceof HttpStatus httpStatus) {
+                status = httpStatus;
+            } else {
+                status = HttpStatus.valueOf(rse.getStatusCode().value());
+            }
             message = rse.getReason() != null ? rse.getReason() : status.getReasonPhrase();
         }
 

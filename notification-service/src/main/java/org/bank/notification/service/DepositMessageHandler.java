@@ -2,7 +2,7 @@ package org.bank.notification.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.bank.notification.config.RabbitMQConfig;
+import org.bank.messaging.RabbitMQConstants;
 import org.bank.notification.service.dto.DepositResponseDTO;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -21,7 +21,7 @@ public class DepositMessageHandler {
         this.mailSender = mailSender;
     }
 
-    @RabbitListener(queues = RabbitMQConfig.DEPOSIT_QUEUE)
+    @RabbitListener(queues = RabbitMQConstants.DEPOSIT_QUEUE)
     public void receive(Message message) throws JsonProcessingException {
         System.out.println(message);
         byte[] body = message.getBody();

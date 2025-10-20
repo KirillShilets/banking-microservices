@@ -1,4 +1,4 @@
-package org.bank.deposit.rest.dto;
+package org.bank.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

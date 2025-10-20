@@ -1,8 +1,9 @@
 package org.bank.bill.controller;
 
 import jakarta.validation.Valid;
-import org.bank.bill.controller.dto.BillRequestDTO;
-import org.bank.bill.controller.dto.BillResponseDTO;
+import org.bank.bill.entity.Bill;
+import org.bank.dto.BillRequestDTO;
+import org.bank.dto.BillResponseDTO;
 import org.bank.bill.service.BillService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -23,7 +24,9 @@ public class BillController {
 
     @GetMapping("/{billId}")
     public BillResponseDTO getBill(@PathVariable Long billId) {
-        return new BillResponseDTO(billService.getBillById(billId));
+        Bill bill = billService.getBillById(billId);
+        return new BillResponseDTO(bill.getBillId(), bill.getAccountId(), bill.getAmount(),
+                bill.getIsDefault(), bill.getCreationDate(), bill.getOverdraftEnabled());
     }
 
     @PostMapping()
@@ -34,20 +37,32 @@ public class BillController {
 
     @PutMapping("/{billId}")
     public BillResponseDTO updateBill(@PathVariable Long billId, @Valid @RequestBody BillRequestDTO billRequestDTO) {
-        return new BillResponseDTO(billService.updateBill(billId,billRequestDTO.getAccountId(),
-                billRequestDTO.getAmount(), billRequestDTO.getIsDefault(), billRequestDTO.getOverdraftEnabled()));
+        Bill bill = billService.updateBill(billId,billRequestDTO.getAccountId(),
+                billRequestDTO.getAmount(), billRequestDTO.getIsDefault(), billRequestDTO.getOverdraftEnabled());
+        return new BillResponseDTO(bill.getBillId(), bill.getAccountId(), bill.getAmount(),
+                bill.getIsDefault(), bill.getCreationDate(), bill.getOverdraftEnabled());
     }
 
     @DeleteMapping("/{billId}")
     public BillResponseDTO deleteBill(@PathVariable Long billId) {
-        return new BillResponseDTO(billService.deleteBill(billId));
+        Bill bill = billService.deleteBill(billId);
+        return new BillResponseDTO(bill.getBillId(), bill.getAccountId(), bill.getAmount(),
+                bill.getIsDefault(), bill.getCreationDate(), bill.getOverdraftEnabled());
     }
 
     @GetMapping("/accounts/{accountId}")
     public List<BillResponseDTO> getBillsByAccountId(@PathVariable Long accountId) {
         return billService.getBillsByAccountId(accountId)
                 .stream()
-                .map(BillResponseDTO::new)
+                .map(bill -> new BillResponseDTO(
+                        bill.getBillId(),
+                        bill.getAccountId(),
+                        bill.getAmount(),
+                        bill.getIsDefault(),
+                        bill.getCreationDate(),
+                        bill.getOverdraftEnabled()
+                ))
                 .collect(Collectors.toList());
     }
+
 }

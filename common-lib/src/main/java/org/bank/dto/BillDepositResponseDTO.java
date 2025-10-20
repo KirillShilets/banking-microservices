@@ -1,14 +1,17 @@
-package org.bank.deposit.rest.dto;
+package org.bank.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Getter
-@Setter
-public class BillRequestDTO {
+@AllArgsConstructor
+@NoArgsConstructor
+public class BillDepositResponseDTO {
+    private Long billId;
     private Long accountId;
     private BigDecimal amount;
     private Boolean isDefault;
