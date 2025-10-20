@@ -3,13 +3,7 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 mail-props.properties
-application.yml
-account-service.yml
-bill-service.yml
-deposit-service.yml
-discovery-service.yml
-gateway-service.yml
-notification-service.yml
+.env*
 
 ### IntelliJ IDEA ###
 .idea/modules.xml

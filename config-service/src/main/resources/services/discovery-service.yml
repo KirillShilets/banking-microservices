@@ -1,0 +1,14 @@
+server:
+  port: 8761
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+info:
+  application:
+    name: Discovery Service
+    description: Central Service Registry (Eureka)
+    version: 1.0.0
