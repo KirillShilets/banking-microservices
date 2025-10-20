@@ -1,18 +1,11 @@
-package org.bank.bill.controller.dto;
+package org.bank.dto;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PastOrPresent;
-import lombok.Getter;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 
-@Getter
-public class BillRequestDTO {
-
-    @NotNull(message = "Account id is required")
-    private Long accountId;
+public class CreateBillRequestDTO {
 
     @NotNull(message = "Amount is required")
     @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
@@ -21,9 +14,18 @@ public class BillRequestDTO {
     @NotNull(message = "IsDefault must be specified")
     private Boolean isDefault;
 
-    @PastOrPresent(message = "Creation date cannot be in the future")
-    private OffsetDateTime creationDate;
-
     @NotNull(message = "OverdraftEnabled must be specified")
     private Boolean overdraftEnabled;
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public Boolean getIsDefault() {
+        return isDefault;
+    }
+
+    public Boolean getOverdraftEnabled() {
+        return overdraftEnabled;
+    }
 }

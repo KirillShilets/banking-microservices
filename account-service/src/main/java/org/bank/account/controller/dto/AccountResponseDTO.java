@@ -1,5 +1,6 @@
 package org.bank.account.controller.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.bank.account.entity.Account;
@@ -15,6 +16,8 @@ public class AccountResponseDTO {
     private String email;
     private String phone;
     private List<Long> bills;
+
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssXXX")
     private OffsetDateTime creationDate;
 
     public AccountResponseDTO(Account account) {

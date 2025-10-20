@@ -1,0 +1,17 @@
+server:
+  port: 9999
+
+spring:
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false
+  rabbitmq:
+    port: 5672
+    host: localhost
+    username: guest
+    password: guest
+    listener:
+      direct:
+        default-requeue-rejected: true

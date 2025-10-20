@@ -3,6 +3,7 @@ package org.bank.account.controller.dto;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.bank.dto.CreateBillRequestDTO;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -12,7 +13,7 @@ import java.util.List;
 public class AccountRequestDTO {
 
     @NotBlank(message = "Name is required")
-    @Size(min = 3, max = 63, message = "Name must be between 2 and 50 characters long")
+    @Size(min = 3, max = 63, message = "Name must be between 3 and 63 characters long")
     private String name;
 
     @Email(message = "Email must be valid")
@@ -25,7 +26,7 @@ public class AccountRequestDTO {
 
     @NotEmpty(message = "Bills list is required")
     @Size(min = 1, message = "At least one bill must be provided")
-    private List<Long> bills;
+    private List<CreateBillRequestDTO> bills;
 
     @PastOrPresent(message = "Creation date cannot be in the future")
     private OffsetDateTime creationDate;
