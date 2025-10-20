@@ -2,20 +2,14 @@ package org.bank.notification.config;
 
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.annotation.EnableRabbit;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import static org.bank.messaging.RabbitMQConstants.*;
+
 @Configuration
 @EnableRabbit
-public class RabbitMQConfig {
-
-    public static final String DEPOSIT_QUEUE = "deposit.queue";
-    private static final String DEPOSIT_EXCHANGE = "deposit.exchange";
-    private static final String DEPOSIT_ROUTING_KEY = "deposit.routing.key";
-
-    @Autowired
-    private AmqpAdmin amqpAdmin;
+public class RabbitMQDepositConfig {
 
     @Bean
     public TopicExchange depositExchange() {
