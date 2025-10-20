@@ -6,27 +6,29 @@ spring:
     name: gateway-service
   cloud:
     gateway:
-      discovery:
-        locator:
-          enabled: true
-          lower-case-service-id: true
-      routes:
-        - id: account_service_route
-          uri: lb://account-service
-          predicates:
-            - Path=/accounts/**
-        - id: bill_service_route
-          uri: lb://bill-service
-          predicates:
-            - Path=/bills/**
-        - id: deposit_service_route
-          uri: lb://deposit-service
-          predicates:
-            - Path=/deposits/**
-      httpclient:
-        wiretap: true
-      httpserver:
-        wiretap: true
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          routes:
+            - id: account_service_route
+              uri: lb://account-service
+              predicates:
+                - Path=/accounts/**
+            - id: bill_service_route
+              uri: lb://bill-service
+              predicates:
+                - Path=/bills/**
+            - id: deposit_service_route
+              uri: lb://deposit-service
+              predicates:
+                - Path=/deposits/**
+          httpclient:
+            wiretap: true
+          httpserver:
+            wiretap: true
 
 eureka:
   client:
