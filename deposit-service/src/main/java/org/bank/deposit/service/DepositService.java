@@ -1,38 +1,56 @@
 package org.bank.deposit.service;
 
-import org.bank.deposit.controller.dto.DepositResponseDTO;
+import org.bank.client.BillServiceClient;
 import org.bank.deposit.entity.Deposit;
-import org.bank.event.DepositCreateEvent;
-import org.bank.deposit.messaging.DepositProducer;
+import org.bank.dto.BillDepositResponseDTO;
+import org.bank.dto.DepositRequestDTO;
 import org.bank.deposit.repository.DepositRepository;
-import org.bank.exception.BadRequestException;
+import org.bank.dto.DepositResponseDTO;
+import org.bank.exception.NotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 
 @Service
 public class DepositService {
 
     private final DepositRepository depositRepository;
-    private final DepositProducer depositProducer;
+    private final BillServiceClient billServiceClient;
 
-    public DepositService(DepositRepository depositRepository,
-                          DepositProducer depositProducer) {
+    @Autowired
+    public DepositService(DepositRepository depositRepository, BillServiceClient billServiceClient) {
         this.depositRepository = depositRepository;
-        this.depositProducer = depositProducer;
+        this.billServiceClient = billServiceClient;
     }
 
-    public DepositResponseDTO deposit(Long accountId, Long billId, BigDecimal amount) {
-        if (accountId == null && billId == null) {
-            throw new BadRequestException("Account ID and Bill ID cannot be null");
+    @Transactional
+    public BillDepositResponseDTO deposit(Long billId, BigDecimal amount, String email) {
+        try {
+            BillDepositResponseDTO response = billServiceClient.depositBill(billId, new DepositRequestDTO(amount, email));
+            Deposit deposit = new Deposit(
+                    response.getAmount(),
+                    response.getBillId(),
+                    response.getEmail(),
+                    response.getCreationDate()
+            );
+            depositRepository.save(deposit);
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new IllegalStateException("Could not create deposit");
         }
-        Deposit deposit = new Deposit(amount, billId, OffsetDateTime.now(), null);
-        depositRepository.save(deposit);
+    }
 
-        DepositCreateEvent event = new DepositCreateEvent(accountId, billId, amount);
-        depositProducer.sendDepositCreatedEvent(event);
+    public DepositResponseDTO getDeposit(Long depositId) {
+        Deposit deposit = getDepositById(depositId);
+        return new DepositResponseDTO(deposit.getAmount(), deposit.getBillId(),deposit.getEmail(), deposit.getCreationDate());
+    }
 
-        return new DepositResponseDTO(amount, null);
+    public Deposit getDepositById(Long depositId) {
+        return depositRepository.findById(depositId).orElseThrow(
+                () -> new NotFoundException("Could not find deposit with id: " + depositId)
+        );
     }
 }

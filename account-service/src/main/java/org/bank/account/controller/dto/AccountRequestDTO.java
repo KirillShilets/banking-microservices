@@ -27,7 +27,4 @@ public class AccountRequestDTO {
     @NotEmpty(message = "Bills list is required")
     @Size(min = 1, message = "At least one bill must be provided")
     private List<CreateBillRequestDTO> bills;
-
-    @PastOrPresent(message = "Creation date cannot be in the future")
-    private OffsetDateTime creationDate;
 }

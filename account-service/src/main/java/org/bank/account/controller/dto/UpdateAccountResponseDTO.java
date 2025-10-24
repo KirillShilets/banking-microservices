@@ -1,8 +1,10 @@
 package org.bank.account.controller.dto;
 
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.bank.account.entity.Account;
 
+@Getter
 @AllArgsConstructor
 public class UpdateAccountResponseDTO {
     private Long accountId;
@@ -15,21 +17,5 @@ public class UpdateAccountResponseDTO {
         name = account.getName();
         email = account.getEmail();
         phone = account.getPhone();
-    }
-
-    public Long getAccountId() {
-        return accountId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getPhone() {
-        return phone;
     }
 }

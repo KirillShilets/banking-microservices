@@ -1,41 +1,20 @@
 spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/bill_service_database
+    username: bill_service_admin
+    password: billserviceadmin
   jpa:
-    database: POSTGRESQL
-    properties.hibernate.temp.use_jdbc_metadata_defaults: false
     hibernate:
       ddl-auto: create
     show-sql: true
     properties:
       hibernate:
         format_sql: true
-  datasource:
-    platform: postgres
-    url: jdbc:postgresql://localhost:5432/bill_service_database
-    username: bill_service_admin
-    password: billserviceadmin
-    driver-class-name: org.postgresql.Driver
   mvc:
     throw-exception-if-no-handler-found: true
-    log-request-details: true
   web:
     resources:
       add-mappings: false
-  rabbitmq:
-    port: 5672
-    host: localhost
-    username: guest
-    password: guest
-    listener:
-      direct:
-        default-requeue-rejected: true
 
 server:
   port: 8082
-  tomcat:
-    accesslog:
-      enabled: true
-      directory: logs
-      prefix: access_log
-      suffix: .log
-      pattern: '%h %l %u %t "%r" %s %b %Dms'
-      rotate: true

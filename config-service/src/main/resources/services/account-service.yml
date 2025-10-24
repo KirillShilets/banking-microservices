@@ -1,28 +1,31 @@
 spring:
-  jpa:
-    database: POSTGRESQL
-    properties.hibernate.temp.use_jdbc_metadata_defaults: false
-    hibernate:
-      ddl-auto: create
-    properties:
   datasource:
-    platform: postgres
     url: jdbc:postgresql://localhost:5432/account_service_database
     username: account_service_admin
     password: accountserviceadmin
     driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
   jackson:
     date-format: yyyy-MM-dd'T'HH:mm:ssXXX
     time-zone: UTC
-  rabbitmq:
-    port: 5672
-    host: localhost
-    username: guest
-    password: guest
-    listener:
-      direct:
-        default-requeue-rejected: true
-
 
 server:
   port: 8081
+
+logging:
+  level:
+    root: INFO
+    org.springframework: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.orm.jdbc.bind: TRACE
+    org.springframework.transaction: TRACE
+    org.springframework.web: DEBUG
+    org.springframework.cloud.openfeign: DEBUG
+    feign: DEBUG
