@@ -1,13 +1,10 @@
 package org.bank.deposit.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotNull;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -20,18 +17,26 @@ import java.time.OffsetDateTime;
 public class Deposit {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "deposit_id")
     private Long depositId;
 
+    @NotNull
+    @Column(name = "amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
+    @NotNull
+    @Column(name = "bill_id", nullable = false)
     private Long billId;
 
-    private OffsetDateTime creationDate;
-
+    @Column(name = "email", nullable = false, length = 127)
     private String email;
 
-    public Deposit(BigDecimal amount, Long billId, OffsetDateTime creationDate, String email) {
+    @CreationTimestamp
+    @Column(name = "creation_date", nullable = false, updatable = false)
+    private OffsetDateTime creationDate;
+
+    public Deposit(BigDecimal amount, Long billId, String email, OffsetDateTime creationDate) {
         this.amount = amount;
         this.billId = billId;
         this.creationDate = creationDate;

@@ -2,12 +2,10 @@ package org.bank.account.controller;
 
 import jakarta.validation.Valid;
 import org.bank.account.controller.dto.AccountRequestDTO;
-import org.bank.account.controller.dto.AccountResponseDTO;
 import org.bank.account.controller.dto.UpdateAccountRequestDTO;
 import org.bank.account.controller.dto.UpdateAccountResponseDTO;
 import org.bank.account.service.AccountService;
-import org.bank.account.service.AccountServiceImpl;
-import org.bank.dto.BillRequestDTO;
+import org.bank.dto.AccountResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,7 +22,7 @@ public class AccountController {
 
     @GetMapping("/{accountId}")
     public AccountResponseDTO getAccount(@PathVariable Long accountId) {
-        return new AccountResponseDTO(accountService.getAccountById(accountId));
+        return accountService.getAccount(accountId);
     }
 
     @PostMapping()
@@ -43,6 +41,6 @@ public class AccountController {
 
     @DeleteMapping("/{accountId}")
     public AccountResponseDTO deleteAccount(@PathVariable Long accountId) {
-        return new AccountResponseDTO(accountService.deleteAccount(accountId));
+        return accountService.deleteAccount(accountId);
     }
 }
