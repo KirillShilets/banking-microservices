@@ -11,15 +11,12 @@ import java.math.BigDecimal;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreateBillRequestDTO {
+public class DepositRequestDTO {
 
     @NotNull(message = "Amount is required")
-    @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
+    @DecimalMin(value = "2.60", message = "Amount must be greater than 2.60")
     private BigDecimal amount;
 
-    @NotNull(message = "IsDefault must be specified")
-    private Boolean isDefault;
-
-    @NotNull(message = "Overdraft must be specified")
-    private Boolean overdraftEnabled;
+    @NotNull(message = "Email is required")
+    private String email;
 }
