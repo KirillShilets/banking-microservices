@@ -4,6 +4,7 @@ import org.bank.client.BillServiceClient;
 import org.bank.dto.AccountResponseDTO;
 import org.bank.dto.BillResponseDTO;
 import org.bank.dto.CreateBillRequestDTO;
+import org.bank.exception.AccountAlreadyExistsException;
 import org.bank.exception.NotFoundException;
 import org.bank.account.entity.Account;
 import org.bank.account.repository.AccountRepository;
@@ -47,6 +48,11 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public Long createAccount(String name, String email, String phone, List<CreateBillRequestDTO> bills) {
         Account account = new Account(name, email, phone, OffsetDateTime.now());
+
+        if(accountRepository.existsByEmail(email)) {
+            throw new AccountAlreadyExistsException("Account with email: " + email + " already exists");
+        }
+
         Account savedAccount = accountRepository.save(account);
         Long accountId = savedAccount.getAccountId();
 
