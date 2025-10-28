@@ -5,7 +5,7 @@ import org.bank.account.controller.dto.AccountRequestDTO;
 import org.bank.account.controller.dto.UpdateAccountRequestDTO;
 import org.bank.account.controller.dto.UpdateAccountResponseDTO;
 import org.bank.account.service.AccountService;
-import org.bank.dto.AccountResponseDTO;
+import org.bank.dto.response.AccountResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 

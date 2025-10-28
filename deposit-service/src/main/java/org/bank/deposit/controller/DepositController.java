@@ -3,9 +3,9 @@ package org.bank.deposit.controller;
 import jakarta.validation.Valid;
 
 import org.bank.deposit.service.DepositService;
-import org.bank.dto.BillDepositResponseDTO;
-import org.bank.dto.DepositRequestDTO;
-import org.bank.dto.DepositResponseDTO;
+import org.bank.dto.response.BillDepositResponseDTO;
+import org.bank.dto.request.DepositRequestDTO;
+import org.bank.dto.response.DepositResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 

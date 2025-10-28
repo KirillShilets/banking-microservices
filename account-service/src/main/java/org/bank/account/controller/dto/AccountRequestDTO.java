@@ -3,9 +3,8 @@ package org.bank.account.controller.dto;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.bank.dto.CreateBillRequestDTO;
+import org.bank.dto.request.CreateBillRequestDTO;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @Getter

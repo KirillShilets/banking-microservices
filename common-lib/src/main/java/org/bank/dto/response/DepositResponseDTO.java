@@ -1,4 +1,4 @@
-package org.bank.dto;
+package org.bank.dto.response;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
