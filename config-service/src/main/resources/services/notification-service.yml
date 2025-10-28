@@ -7,3 +7,12 @@ spring:
   web:
     resources:
       add-mappings: false
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: checkmailbanksystem@gmail.com
+    password: uigi yook pmpm jwdx
+    smtp-auth: true
+    starttls-enable: true
+    debug: true,
+    from: checkmailbanksystem@gmail.com

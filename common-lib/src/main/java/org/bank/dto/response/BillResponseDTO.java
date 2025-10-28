@@ -1,4 +1,4 @@
-package org.bank.dto;
+package org.bank.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
@@ -9,16 +9,15 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Getter
-@AllArgsConstructor
 @NoArgsConstructor
-public class BillDepositResponseDTO {
+@AllArgsConstructor
+public class BillResponseDTO {
     private Long billId;
     private Long accountId;
     private BigDecimal amount;
-    private String email;
     private Boolean isDefault;
-    private Boolean overdraftEnabled;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssXXX")
     private OffsetDateTime creationDate;
+    private Boolean overdraftEnabled;
 }

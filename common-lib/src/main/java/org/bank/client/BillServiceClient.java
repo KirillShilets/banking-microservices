@@ -1,10 +1,10 @@
 package org.bank.client;
 
 import jakarta.validation.Valid;
-import org.bank.dto.BillDepositResponseDTO;
-import org.bank.dto.BillResponseDTO;
-import org.bank.dto.CreateBillRequestDTO;
-import org.bank.dto.DepositRequestDTO;
+import org.bank.dto.response.BillDepositResponseDTO;
+import org.bank.dto.response.BillResponseDTO;
+import org.bank.dto.request.CreateBillRequestDTO;
+import org.bank.dto.request.DepositRequestDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 

@@ -1,8 +1,8 @@
 package org.bank.account.service;
 
 import org.bank.account.entity.Account;
-import org.bank.dto.AccountResponseDTO;
-import org.bank.dto.CreateBillRequestDTO;
+import org.bank.dto.response.AccountResponseDTO;
+import org.bank.dto.request.CreateBillRequestDTO;
 
 import java.util.List;
 
