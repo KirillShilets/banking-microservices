@@ -1,15 +1,16 @@
 package org.bank.bill.controller;
 
 import jakarta.validation.Valid;
-import org.bank.bill.entity.Bill;
 import org.bank.bill.service.BillService;
-import org.bank.dto.*;
-import org.bank.bill.service.BillServiceImpl;
+import org.bank.dto.request.BillRequestDTO;
+import org.bank.dto.request.CreateBillRequestDTO;
+import org.bank.dto.request.DepositRequestDTO;
+import org.bank.dto.response.BillDepositResponseDTO;
+import org.bank.dto.response.BillResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/bills")

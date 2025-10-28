@@ -2,10 +2,10 @@ package org.bank.deposit.service;
 
 import org.bank.client.BillServiceClient;
 import org.bank.deposit.entity.Deposit;
-import org.bank.dto.BillDepositResponseDTO;
-import org.bank.dto.DepositRequestDTO;
+import org.bank.dto.response.BillDepositResponseDTO;
+import org.bank.dto.request.DepositRequestDTO;
 import org.bank.deposit.repository.DepositRepository;
-import org.bank.dto.DepositResponseDTO;
+import org.bank.dto.response.DepositResponseDTO;
 import org.bank.exception.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

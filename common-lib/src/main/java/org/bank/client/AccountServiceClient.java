@@ -1,6 +1,6 @@
 package org.bank.client;
 
-import org.bank.dto.AccountResponseDTO;
+import org.bank.dto.response.AccountResponseDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

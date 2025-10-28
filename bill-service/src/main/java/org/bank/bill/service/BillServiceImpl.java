@@ -1,10 +1,10 @@
 package org.bank.bill.service;
 
 import org.bank.client.AccountServiceClient;
-import org.bank.dto.AccountResponseDTO;
-import org.bank.dto.BillDepositResponseDTO;
-import org.bank.dto.BillResponseDTO;
-import org.bank.dto.CreateBillRequestDTO;
+import org.bank.dto.response.AccountResponseDTO;
+import org.bank.dto.response.BillDepositResponseDTO;
+import org.bank.dto.response.BillResponseDTO;
+import org.bank.dto.request.CreateBillRequestDTO;
 import org.bank.exception.NotFoundException;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.repository.BillRepository;

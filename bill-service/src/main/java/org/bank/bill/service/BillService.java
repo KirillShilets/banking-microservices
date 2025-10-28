@@ -1,8 +1,8 @@
 package org.bank.bill.service;
 
-import org.bank.dto.BillDepositResponseDTO;
-import org.bank.dto.BillResponseDTO;
-import org.bank.dto.CreateBillRequestDTO;
+import org.bank.dto.response.BillDepositResponseDTO;
+import org.bank.dto.response.BillResponseDTO;
+import org.bank.dto.request.CreateBillRequestDTO;
 
 import java.math.BigDecimal;
 import java.util.List;

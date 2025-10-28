@@ -4,7 +4,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
-import org.springframework.core.env.Environment;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
@@ -14,23 +13,27 @@ import java.util.Properties;
 @PropertySource("classpath:mail-props.properties")
 public class MailConfig {
 
+    private final MailProperties mailProperties;
+
     @Autowired
-    private Environment env;
+    public MailConfig(MailProperties mailProperties) {
+        this.mailProperties = mailProperties;
+    }
 
     @Bean
     public JavaMailSender getJavaMailSender() {
         JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
-        mailSender.setHost(env.getProperty("mail.host"));
-        mailSender.setPort(env.getProperty("mail.port", Integer.class, 587));
-        mailSender.setUsername(env.getProperty("mail.username"));
-        mailSender.setPassword(env.getProperty("mail.password"));
+        mailSender.setHost(mailProperties.getHost());
+        mailSender.setPort(mailProperties.getPort());
+        mailSender.setUsername(mailProperties.getUsername());
+        mailSender.setPassword(mailProperties.getPassword());
 
         Properties props = mailSender.getJavaMailProperties();
         props.put("mail.transport.protocol", "smtp");
-        props.put("mail.smtp.auth", env.getProperty("mail.smtp.auth"));
-        props.put("mail.smtp.starttls.enable", env.getProperty("mail.smtp.starttls.enable"));
-        props.put("mail.smtp.ssl.trust", env.getProperty("mail.host"));
-        props.put("mail.debug", env.getProperty("mail.debug"));
+        props.put("mail.smtp.auth", String.valueOf(mailProperties.isSmtpAuth()));
+        props.put("mail.smtp.starttls.enable", String.valueOf(mailProperties.isStarttlsEnable()));
+        props.put("mail.smtp.ssl.trust", String.valueOf(mailProperties.getHost()));
+        props.put("mail.debug", String.valueOf(mailProperties.isDebug()));
 
         return mailSender;
     }

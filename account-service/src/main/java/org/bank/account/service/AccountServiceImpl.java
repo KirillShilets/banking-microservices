@@ -1,9 +1,9 @@
 package org.bank.account.service;
 
 import org.bank.client.BillServiceClient;
-import org.bank.dto.AccountResponseDTO;
-import org.bank.dto.BillResponseDTO;
-import org.bank.dto.CreateBillRequestDTO;
+import org.bank.dto.response.AccountResponseDTO;
+import org.bank.dto.response.BillResponseDTO;
+import org.bank.dto.request.CreateBillRequestDTO;
 import org.bank.exception.AccountAlreadyExistsException;
 import org.bank.exception.NotFoundException;
 import org.bank.account.entity.Account;
