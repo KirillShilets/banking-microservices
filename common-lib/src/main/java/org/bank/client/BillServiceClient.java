@@ -23,4 +23,7 @@ public interface BillServiceClient {
 
     @DeleteMapping("/bills/{billId}")
     BillResponseDTO deleteBill(@PathVariable("billId") Long billId);
+
+    @DeleteMapping("/bills/accounts/{accountId}")
+    void deleteBillsByAccountId(@PathVariable("accountId") Long accountId);
 }
