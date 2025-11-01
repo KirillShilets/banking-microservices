@@ -31,6 +31,7 @@ public class BillServiceImpl implements BillService {
 
 
     @Override
+    @Transactional
     public List<Long> createBillsForAccount(Long accountId, List<CreateBillRequestDTO> bills) {
         List<Bill> billsToSave = bills.stream()
                 .map(dto -> new Bill(accountId, dto.getAmount(),
@@ -44,11 +45,13 @@ public class BillServiceImpl implements BillService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public BillResponseDTO getBillById(Long billId) {
         return createResponseBillDTO(findBillById(billId));
     }
 
     @Override
+    @Transactional
     public Long createBill(Long accountId, BigDecimal amount, Boolean isDefault, Boolean overdraftEnabled) {
         AccountResponseDTO account = accountServiceClient.getAccount(accountId);
         Bill bill = new Bill(accountId, amount, isDefault, overdraftEnabled);
@@ -69,6 +72,7 @@ public class BillServiceImpl implements BillService {
     }
 
     @Override
+    @Transactional
     public BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount,
                                       Boolean isDefault, Boolean overdraftEnabled) {
         Bill billToUpdate = findBillById(billId);
@@ -81,6 +85,7 @@ public class BillServiceImpl implements BillService {
     }
 
     @Override
+    @Transactional
     public BillResponseDTO deleteBill(Long billId) {
         Bill bill = findBillById(billId);
         billRepository.delete(bill);
@@ -88,6 +93,13 @@ public class BillServiceImpl implements BillService {
     }
 
     @Override
+    @Transactional
+    public void deleteBillsByAccountId(Long accountId) {
+        billRepository.deleteBillsByAccountId(accountId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<BillResponseDTO> getBillsByAccountId(Long accountId) {
         return billRepository.getBillsByAccountId(accountId)
                 .stream()

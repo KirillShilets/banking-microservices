@@ -7,6 +7,7 @@ import org.bank.account.controller.dto.UpdateAccountResponseDTO;
 import org.bank.account.service.AccountService;
 import org.bank.dto.response.AccountResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -40,7 +41,8 @@ public class AccountController {
     }
 
     @DeleteMapping("/{accountId}")
-    public AccountResponseDTO deleteAccount(@PathVariable Long accountId) {
-        return accountService.deleteAccount(accountId);
+    public ResponseEntity<Void> deleteAccount(@PathVariable Long accountId) {
+        accountService.deleteAccount(accountId);
+        return ResponseEntity.noContent().build();
     }
 }

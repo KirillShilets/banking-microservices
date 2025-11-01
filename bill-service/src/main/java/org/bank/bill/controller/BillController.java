@@ -56,6 +56,11 @@ public class BillController {
         return billService.deleteBill(billId);
     }
 
+    @DeleteMapping("/accounts/{accountId}")
+    public void deleteBillsByAccountId(@PathVariable Long accountId) {
+        billService.deleteBillsByAccountId(accountId);
+    }
+
     @GetMapping("/accounts/{accountId}")
     public List<BillResponseDTO> getBillsByAccountId(@PathVariable Long accountId) {
         return billService.getBillsByAccountId(accountId);

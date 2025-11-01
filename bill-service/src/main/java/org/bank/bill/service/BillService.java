@@ -14,5 +14,6 @@ public interface BillService {
     BillDepositResponseDTO depositBill(Long accountId, BigDecimal amount);
     BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount, Boolean isDefault, Boolean overdraftEnabled);
     BillResponseDTO deleteBill(Long billId);
+    void deleteBillsByAccountId(Long accountId);
     List<BillResponseDTO> getBillsByAccountId(Long accountId);
 }

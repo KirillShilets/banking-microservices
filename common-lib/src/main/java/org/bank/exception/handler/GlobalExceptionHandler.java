@@ -19,6 +19,7 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.Objects;
 
 @EnableWebMvc
 @RestControllerAdvice
@@ -57,7 +58,7 @@ public class GlobalExceptionHandler {
                 .stream()
                 .collect(Collectors.toMap(
                         FieldError::getField,
-                        FieldError::getDefaultMessage,
+                        fe -> Objects.toString(fe.getDefaultMessage(), ""),
                         (first, second) -> first
                 ));
 
@@ -88,9 +89,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponseDTO> handleMessageNotReadable(HttpMessageNotReadableException ex) {
-        log.warn("Malformed JSON request: {}", ex.getMessage());
+        log.warn("Invalid request body: {}", ex.getMessage());
         ErrorResponseDTO response = new ErrorResponseDTO(
-                "Malformed request body. Please check the request format.",
+                "Invalid request body. Check that your JSON is valid and all required fields are present.",
                 HttpStatus.BAD_REQUEST.value(),
                 LocalDateTime.now()
         );
