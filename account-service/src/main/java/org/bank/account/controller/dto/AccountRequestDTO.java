@@ -1,5 +1,6 @@
 package org.bank.account.controller.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -23,6 +24,7 @@ public class AccountRequestDTO {
     @Pattern(regexp = "\\+?[0-9]{10,15}", message = "Phone number must be valid")
     private String phone;
 
+    @Valid
     @NotEmpty(message = "Bills list is required")
     @Size(min = 1, message = "At least one bill must be provided")
     private List<CreateBillRequestDTO> bills;

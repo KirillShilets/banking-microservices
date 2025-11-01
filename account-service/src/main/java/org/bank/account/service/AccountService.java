@@ -11,5 +11,5 @@ public interface AccountService {
     AccountResponseDTO getAccount(Long accountId);
     Long createAccount(String name, String email, String phone, List<CreateBillRequestDTO> bills);
     Account updateAccount(Long accountId, String name, String email, String phone);
-    AccountResponseDTO deleteAccount(Long accountId);
+    void deleteAccount(Long accountId);
 }
