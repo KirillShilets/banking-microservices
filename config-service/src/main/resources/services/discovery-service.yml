@@ -12,3 +12,8 @@ info:
     name: Discovery Service
     description: Central Service Registry (Eureka)
     version: 1.0.0
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false

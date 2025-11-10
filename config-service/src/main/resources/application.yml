@@ -3,7 +3,8 @@ spring:
     config:
       server:
         native:
-          search-locations: classpath:/services
+          search-locations: file:/app/config
+      enabled: false
   profiles:
     active: native
   security:

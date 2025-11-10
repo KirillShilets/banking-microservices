@@ -45,6 +45,15 @@ dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter"
 }
 
+bootJar {
+    mainClass = 'org.bank.deposit.DepositApplication'
+    archiveFileName = 'app.jar'
+}
+
+jar {
+    enabled = false
+}
+
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
