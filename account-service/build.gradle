@@ -43,6 +43,15 @@ dependencies {
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
+bootJar {
+    mainClass = 'org.bank.account.AccountApplication'
+    archiveFileName = 'app.jar'
+}
+
+jar {
+    enabled = false
+}
+
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }

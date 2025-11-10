@@ -1,0 +1,212 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: bank_user
+      POSTGRES_PASSWORD: bankingadmin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  config-service:
+    build:
+      context: ./config-service
+      dockerfile: Dockerfile
+    container_name: config-service
+    ports:
+      - "8001:8001"
+    environment:
+      SPRING_PROFILES_ACTIVE: native
+      SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:/config-repo
+      SPRING_SECURITY_USER_NAME: user
+      SPRING_SECURITY_USER_PASSWORD: bankconfigadmin123
+    volumes:
+      - C:\Users\Administrator\IdeaProjects\spring-cloud-banking-system\config-service\src\main\resources\services:/config-repo
+    networks:
+      - bank-net
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "-u", "user:bankconfigadmin123","http://localhost:8001/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  discovery-service:
+    build:
+      context: ./discovery-service
+      dockerfile: Dockerfile
+    container_name: discovery-service
+    depends_on:
+      config-service:
+        condition: service_healthy
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://user:bankconfigadmin123@config-service:8001
+      SPRING_CLOUD_CONFIG_FAIL_FAST: "true"
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  account-service:
+    build:
+      context: .
+      dockerfile: account-service/Dockerfile
+    container_name: account-service
+    depends_on:
+      config-service:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+      SPRING_CONFIG_IMPORT: optional:configserver:http://user:bankconfigadmin123@config-service:8001
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/account_service_database
+      SPRING_DATASOURCE_USERNAME: account_service_admin
+      SPRING_DATASOURCE_PASSWORD: accountserviceadmin
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  bill-service:
+    build:
+      context: .
+      dockerfile: bill-service/Dockerfile
+    container_name: bill-service
+    depends_on:
+      config-service:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+      SPRING_CLOUD_CONFIG_URI: http://config-service:8001
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bill_service_database
+      SPRING_DATASOURCE_USERNAME: bill_service_admin
+      SPRING_DATASOURCE_PASSWORD: billserviceadmin
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  deposit-service:
+    build:
+      context: .
+      dockerfile: deposit-service/Dockerfile
+    container_name: deposit-service
+    depends_on:
+      config-service:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+      SPRING_CLOUD_CONFIG_URI: http://config-service:8001
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/deposit_service_database
+      SPRING_DATASOURCE_USERNAME: deposit_service_admin
+      SPRING_DATASOURCE_PASSWORD: depositserviceadmin
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: notification-service
+    depends_on:
+      config-service:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+    ports:
+      - "9999:9999"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+      SPRING_CLOUD_CONFIG_URI: http://config-service:8001
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9999/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  gateway-service:
+    build:
+      context: .
+      dockerfile: gateway-service/Dockerfile
+    container_name: gateway-service
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
+      bill-service:
+        condition: service_healthy
+      deposit-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    ports:
+      - "8989:8989"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+      SPRING_CLOUD_CONFIG_URI: http://config-service:8001
+    networks:
+      - bank-net
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8989/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+networks:
+  bank-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
