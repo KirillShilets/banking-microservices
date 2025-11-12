@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: bank_user
       POSTGRES_PASSWORD: bankingadmin
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
@@ -52,41 +52,12 @@ services:
     ports:
       - "8761:8761"
     environment:
-      SPRING_CONFIG_IMPORT: optional:configserver:http://user:bankconfigadmin123@config-service:8001
+      SPRING_CONFIG_IMPORT: configserver:http://user:bankconfigadmin123@config-service:8001
       SPRING_CLOUD_CONFIG_FAIL_FAST: "true"
     networks:
       - bank-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-
-  account-service:
-    build:
-      context: .
-      dockerfile: account-service/Dockerfile
-    container_name: account-service
-    depends_on:
-      config-service:
-        condition: service_healthy
-      discovery-service:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    ports:
-      - "8081:8081"
-    environment:
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CONFIG_IMPORT: optional:configserver:http://user:bankconfigadmin123@config-service:8001
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/account_service_database
-      SPRING_DATASOURCE_USERNAME: account_service_admin
-      SPRING_DATASOURCE_PASSWORD: accountserviceadmin
-    networks:
-      - bank-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -108,7 +79,7 @@ services:
       - "8082:8082"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CLOUD_CONFIG_URI: http://config-service:8001
+      SPRING_CONFIG_IMPORT: configserver:http://user:bankconfigadmin123@config-service:8001
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bill_service_database
       SPRING_DATASOURCE_USERNAME: bill_service_admin
       SPRING_DATASOURCE_PASSWORD: billserviceadmin
@@ -116,6 +87,37 @@ services:
       - bank-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  account-service:
+    build:
+      context: .
+      dockerfile: account-service/Dockerfile
+    container_name: account-service
+    depends_on:
+      config-service:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      bill-service:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
+      SPRING_CONFIG_IMPORT: configserver:http://user:bankconfigadmin123@config-service:8001
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/account_service_database
+      SPRING_DATASOURCE_USERNAME: account_service_admin
+      SPRING_DATASOURCE_PASSWORD: accountserviceadmin
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -133,11 +135,15 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      bill-service:
+        condition: service_healthy
+      account-service:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CLOUD_CONFIG_URI: http://config-service:8001
+      SPRING_CONFIG_IMPORT: configserver:http://user:bankconfigadmin123@config-service:8001
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/deposit_service_database
       SPRING_DATASOURCE_USERNAME: deposit_service_admin
       SPRING_DATASOURCE_PASSWORD: depositserviceadmin
@@ -164,7 +170,7 @@ services:
       - "9999:9999"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CLOUD_CONFIG_URI: http://config-service:8001
+      SPRING_CONFIG_IMPORT: configserver:http://user:bankconfigadmin123@config-service:8001
     networks:
       - bank-net
     healthcheck:
@@ -194,12 +200,12 @@ services:
       - "8989:8989"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CLOUD_CONFIG_URI: http://config-service:8001
+      SPRING_CONFIG_IMPORT: configserver:http://user:bankconfigadmin123@config-service:8001
     networks:
       - bank-net
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8989/actuator/health" ]
-      interval: 10s
+      interval: 3s
       timeout: 5s
       retries: 10
       start_period: 10s

@@ -1,6 +1,8 @@
 package org.bank.account.service;
 
-import org.bank.client.BillServiceClient;
+import lombok.RequiredArgsConstructor;
+import org.bank.account.handler.event.AccountCreatedEvent;
+import org.bank.account.handler.event.AccountDeletedEvent;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
 import org.bank.exception.AccountAlreadyExistsException;
@@ -8,6 +10,7 @@ import org.bank.exception.NotFoundException;
 import org.bank.account.entity.Account;
 import org.bank.account.repository.AccountRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,16 +18,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor(onConstructor_ = {@Autowired})
 public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
-    private final BillServiceClient billServiceClient;
-
-    @Autowired
-    public AccountServiceImpl(AccountRepository accountRepository, BillServiceClient billServiceClient) {
-        this.accountRepository = accountRepository;
-        this.billServiceClient = billServiceClient;
-    }
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -49,19 +47,13 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public Long createAccount(String name, String email, String phone, List<CreateBillRequestDTO> bills) {
         Account account = new Account(name, email, phone, OffsetDateTime.now());
-
         if(accountRepository.existsByEmail(email)) {
             throw new AccountAlreadyExistsException("Account with email: " + email + " already exists");
         }
-
         Account savedAccount = accountRepository.save(account);
         Long accountId = savedAccount.getAccountId();
 
-        try {
-            billServiceClient.createBillsForAccount(accountId, bills);
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not create bills for the new account. Aborting account creation.", e);
-        }
+        eventPublisher.publishEvent(new AccountCreatedEvent(account.getAccountId(), bills));
 
         return accountId;
     }
@@ -82,7 +74,7 @@ public class AccountServiceImpl implements AccountService {
         if(!accountRepository.existsById(accountId)) {
             throw new NotFoundException("Unable to find account with id: " + accountId);
         }
-        billServiceClient.deleteBillsByAccountId(accountId);
         accountRepository.deleteAccountById(accountId);
+        eventPublisher.publishEvent(new AccountDeletedEvent(accountId));
     }
 }

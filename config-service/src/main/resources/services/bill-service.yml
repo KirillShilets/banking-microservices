@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/bill_service_database
+    url: jdbc:postgresql://postgres:5432/bill_service_database
     username: bill_service_admin
     password: billserviceadmin
   jpa:
@@ -18,3 +18,8 @@ spring:
 
 server:
   port: 8082
+
+eureka:
+  client:
+    healthcheck:
+      enabled: true

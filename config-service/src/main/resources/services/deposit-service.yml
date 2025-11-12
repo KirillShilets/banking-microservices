@@ -6,9 +6,10 @@ spring:
         temp.use_jdbc_metadata_defaults: false
     hibernate:
       ddl-auto: create
+    show-sql: true
   datasource:
     platform: postgres
-    url: jdbc:postgresql://localhost:5432/deposit_service_database
+    url: jdbc:postgresql://postgres:5432/deposit_service_database
     username: deposit_service_admin
     password: depositserviceadmin
     driver-class-name: org.postgresql.Driver
@@ -19,7 +20,14 @@ eureka:
   client:
     register-with-eureka: true
     fetch-registry: true
+    healthcheck:
+      enabled: true
 
 info:
   application:
     name: Deposit Service
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
