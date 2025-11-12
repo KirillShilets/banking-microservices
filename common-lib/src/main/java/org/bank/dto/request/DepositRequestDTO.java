@@ -13,6 +13,9 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class DepositRequestDTO {
 
+    @NotNull(message = "Bill id is required")
+    private Long billId;
+
     @NotNull(message = "Amount is required")
     @DecimalMin(value = "2.60", message = "Amount must be greater than 2.60")
     private BigDecimal amount;

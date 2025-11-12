@@ -1,46 +1,37 @@
 package org.bank.deposit.service;
 
-import org.bank.client.BillServiceClient;
+import lombok.RequiredArgsConstructor;
 import org.bank.deposit.entity.Deposit;
+import org.bank.deposit.handler.event.DepositEvent;
 import org.bank.dto.response.BillDepositResponseDTO;
-import org.bank.dto.request.DepositRequestDTO;
 import org.bank.deposit.repository.DepositRepository;
 import org.bank.dto.response.DepositResponseDTO;
 import org.bank.exception.NotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 
 @Service
+@RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class DepositService {
 
     private final DepositRepository depositRepository;
-    private final BillServiceClient billServiceClient;
-
-    @Autowired
-    public DepositService(DepositRepository depositRepository, BillServiceClient billServiceClient) {
-        this.depositRepository = depositRepository;
-        this.billServiceClient = billServiceClient;
-    }
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public BillDepositResponseDTO deposit(Long billId, BigDecimal amount, String email) {
-        try {
-            BillDepositResponseDTO response = billServiceClient.depositBill(billId, new DepositRequestDTO(amount, email));
-            Deposit deposit = new Deposit(
-                    response.getAmount(),
-                    response.getBillId(),
-                    response.getEmail(),
-                    response.getCreationDate()
-            );
-            depositRepository.save(deposit);
-            return response;
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new IllegalStateException("Could not create deposit");
-        }
+    public DepositResponseDTO deposit(Long fromBillId, Long toBillId, BigDecimal amount, String email) {
+        Deposit deposit = new Deposit(
+                amount,
+                toBillId,
+                email,
+                OffsetDateTime.now()
+        );
+        Deposit savedDeposit = depositRepository.save(deposit);
+        return new DepositResponseDTO(savedDeposit.getAmount(), savedDeposit.getBillId(), savedDeposit.getEmail(), savedDeposit.getCreationDate());
     }
 
     public DepositResponseDTO getDeposit(Long depositId) {

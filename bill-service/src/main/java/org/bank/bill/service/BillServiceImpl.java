@@ -1,6 +1,9 @@
 package org.bank.bill.service;
 
+import lombok.RequiredArgsConstructor;
 import org.bank.client.AccountServiceClient;
+import org.bank.client.DepositServiceClient;
+import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
@@ -18,17 +21,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor(onConstructor_ = {@Autowired})
 public class BillServiceImpl implements BillService {
 
     private final BillRepository billRepository;
     private final AccountServiceClient accountServiceClient;
-
-    @Autowired
-    public BillServiceImpl(BillRepository billRepository, AccountServiceClient accountServiceClient) {
-        this.billRepository = billRepository;
-        this.accountServiceClient = accountServiceClient;
-    }
-
+    private final DepositServiceClient depositServiceClient;
 
     @Override
     @Transactional
@@ -66,6 +64,7 @@ public class BillServiceImpl implements BillService {
         billRepository.save(bill);
 
         String email = accountServiceClient.getAccount(bill.getAccountId()).getEmail();
+        depositServiceClient.deposit(billId, new DepositRequestDTO(bill.getBillId(), amount, email));
 
         return new BillDepositResponseDTO(billId, bill.getAccountId(), bill.getAmount(), email,
                 bill.getIsDefault(), bill.getOverdraftEnabled(), bill.getCreationDate());
