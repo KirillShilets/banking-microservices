@@ -18,7 +18,7 @@ public class DepositController {
 
     @PostMapping("/{billId}")
     public DepositResponseDTO deposit(@PathVariable("billId") Long fromBillId, @Valid @RequestBody DepositRequestDTO depositRequestDTO) {
-        return depositService.deposit(fromBillId, depositRequestDTO.getBillId(), depositRequestDTO.getAmount(), depositRequestDTO.getEmail());
+        return depositService.deposit(fromBillId, depositRequestDTO.billId(), depositRequestDTO.amount(), depositRequestDTO.email());
     }
 
     @GetMapping("/{depositId}")

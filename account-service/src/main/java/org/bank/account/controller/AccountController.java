@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.bank.account.controller.dto.AccountRequestDTO;
 import org.bank.account.controller.dto.UpdateAccountRequestDTO;
 import org.bank.account.controller.dto.UpdateAccountResponseDTO;
+import org.bank.account.entity.Account;
 import org.bank.account.service.AccountService;
 import org.bank.dto.response.AccountResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,16 +29,14 @@ public class AccountController {
 
     @PostMapping()
     public Long createAccount(@Valid @RequestBody AccountRequestDTO accountRequestDTO) {
-        return accountService.createAccount(accountRequestDTO.getName(), accountRequestDTO.getEmail(),
-                accountRequestDTO.getPhone(), accountRequestDTO.getBills());
+        return accountService.createAccount(accountRequestDTO.name(), accountRequestDTO.email(),
+                accountRequestDTO.phone(), accountRequestDTO.bills());
     }
 
     @PutMapping("/{accountId}")
     public UpdateAccountResponseDTO updateAccount(@PathVariable Long accountId,
                                                   @Valid @RequestBody UpdateAccountRequestDTO updateAccountRequestDTO) {
-        return new UpdateAccountResponseDTO(accountService.updateAccount(accountId,
-                updateAccountRequestDTO.getName(), updateAccountRequestDTO.getEmail(),
-                updateAccountRequestDTO.getPhone()));
+        return accountService.updateAccount(accountId, updateAccountRequestDTO.name(), updateAccountRequestDTO.email(), updateAccountRequestDTO.phone());
     }
 
     @DeleteMapping("/{accountId}")

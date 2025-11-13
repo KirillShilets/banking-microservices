@@ -30,8 +30,8 @@ public class BillController {
 
     @PostMapping()
     public Long createBill(@Valid @RequestBody BillRequestDTO billRequestDTO) {
-        return billService.createBill(billRequestDTO.getAccountId(), billRequestDTO.getAmount(),
-                billRequestDTO.getIsDefault(), billRequestDTO.getOverdraftEnabled());
+        return billService.createBill(billRequestDTO.accountId(), billRequestDTO.amount(),
+                billRequestDTO.isDefault(), billRequestDTO.overdraftEnabled());
     }
 
     @PostMapping("/accounts/{accountId}")
@@ -42,13 +42,13 @@ public class BillController {
 
     @PostMapping("/deposits/{billId}")
     public BillDepositResponseDTO depositBill(@PathVariable Long billId, @Valid @RequestBody DepositRequestDTO depositRequestDTO) {
-        return billService.depositBill(billId, depositRequestDTO.getAmount());
+        return billService.depositBill(billId, depositRequestDTO.amount());
     }
 
     @PutMapping("/{billId}")
     public BillResponseDTO updateBill(@PathVariable Long billId, @Valid @RequestBody BillRequestDTO billRequestDTO) {
-        return billService.updateBill(billId, billRequestDTO.getAccountId(), billRequestDTO.getAmount(),
-                billRequestDTO.getIsDefault(), billRequestDTO.getOverdraftEnabled());
+        return billService.updateBill(billId, billRequestDTO.accountId(), billRequestDTO.amount(),
+                billRequestDTO.isDefault(), billRequestDTO.overdraftEnabled());
     }
 
     @DeleteMapping("/{billId}")
