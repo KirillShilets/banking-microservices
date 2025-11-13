@@ -26,22 +26,22 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public NotificationResponseDTO sendDepositNotification(DepositRequestDTO requestDTO) {
-        log.info("Sending deposit notification to {}", requestDTO.getEmail());
+        log.info("Sending deposit notification to {}", requestDTO.email());
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(requestDTO.getEmail());
+        message.setTo(requestDTO.email());
         message.setFrom(mailProperties.getFrom());
         message.setSubject("Deposit Notification");
         message.setText(String.format(
                 "Your deposit was successful.\nAmount: %s",
-                requestDTO.getAmount()
+                requestDTO.amount()
         ));
 
         try {
             mailSender.send(message);
-            log.info("Successfully sent deposit notification to {}", requestDTO.getEmail());
-            return new NotificationResponseDTO(requestDTO.getEmail(), "Notification sent successfully");
+            log.info("Successfully sent deposit notification to {}", requestDTO.email());
+            return new NotificationResponseDTO(requestDTO.email(), "Notification sent successfully");
         } catch (Exception e) {
-            log.error("Failed to send deposit notification to {}", requestDTO.getEmail(), e);
+            log.error("Failed to send deposit notification to {}", requestDTO.email(), e);
             throw new NotificationSendException("Failed to send deposit notification");
         }
     }

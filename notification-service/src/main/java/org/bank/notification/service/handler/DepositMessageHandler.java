@@ -17,19 +17,19 @@ public class DepositMessageHandler {
     }
 
     public void sendDepositMail(DepositResponseDTO depositResponseDTO) {
-        log.info("Preparing to send deposit notification email to {}", depositResponseDTO.getMail());
+        log.info("Preparing to send deposit notification email to {}", depositResponseDTO.email());
 
         SimpleMailMessage mailMessage = new SimpleMailMessage();
-        mailMessage.setTo(depositResponseDTO.getMail());
+        mailMessage.setTo(depositResponseDTO.email());
         mailMessage.setFrom("checkmailbanksystem@gmail.com");
         mailMessage.setSubject("Deposit Notification");
-        mailMessage.setText("Your deposit was successful. Amount: " + depositResponseDTO.getAmount());
+        mailMessage.setText("Your deposit was successful. Amount: " + depositResponseDTO.amount());
 
         try {
             mailSender.send(mailMessage);
-            log.info("Deposit notification sent successfully to {}", depositResponseDTO.getMail());
+            log.info("Deposit notification sent successfully to {}", depositResponseDTO.email());
         } catch (Exception e) {
-            log.error("Failed to send deposit notification to {}: {}", depositResponseDTO.getMail(), e.getMessage());
+            log.error("Failed to send deposit notification to {}: {}", depositResponseDTO.email(), e.getMessage());
             throw new RuntimeException("Failed to send email", e);
         }
     }

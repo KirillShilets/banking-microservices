@@ -52,7 +52,7 @@ public interface BillServiceClient {
             maxAttempts = 5,
             backoff = @Backoff(delay = 2000)
     )
-    BillResponseDTO deleteBill(@PathVariable("billId") Long billId);
+    void deleteBill(@PathVariable("billId") Long billId);
 
     @DeleteMapping("/bills/accounts/{accountId}")
     @Retryable(

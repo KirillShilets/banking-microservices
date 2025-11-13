@@ -2,23 +2,13 @@ package org.bank.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
-import lombok.Getter;
 
 import java.math.BigDecimal;
 
-@Getter
-public class BillRequestDTO {
+public record BillRequestDTO(
+        @NotNull(message = "Account id is required") Long accountId,
+        @NotNull(message = "Amount is required") @DecimalMin("0.01") BigDecimal amount,
+        @NotNull(message = "IsDefault must be specified") Boolean isDefault,
+        @NotNull(message = "Overdraft must be specified") Boolean overdraftEnabled
+) {}
 
-    @NotNull(message = "Account id is required")
-    private Long accountId;
-
-    @NotNull(message = "Amount is required")
-    @DecimalMin(value = "0.01", message = "Amount must be greater than 0")
-    private BigDecimal amount;
-
-    @NotNull(message = "IsDefault must be specified")
-    private Boolean isDefault;
-
-    @NotNull(message = "Overdraft must be specified")
-    private Boolean overdraftEnabled;
-}

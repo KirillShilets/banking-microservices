@@ -31,9 +31,10 @@ public class BillServiceImpl implements BillService {
     @Override
     @Transactional
     public List<Long> createBillsForAccount(Long accountId, List<CreateBillRequestDTO> bills) {
+        accountServiceClient.getAccount(accountId);
         List<Bill> billsToSave = bills.stream()
-                .map(dto -> new Bill(accountId, dto.getAmount(),
-                        dto.getIsDefault(), OffsetDateTime.now(), dto.getOverdraftEnabled()))
+                .map(dto -> new Bill(accountId, dto.amount(),
+                        dto.isDefault(), OffsetDateTime.now(), dto.overdraftEnabled()))
                 .collect(Collectors.toList());
         List<Bill> savedBills = billRepository.saveAll(billsToSave);
 
@@ -51,7 +52,7 @@ public class BillServiceImpl implements BillService {
     @Override
     @Transactional
     public Long createBill(Long accountId, BigDecimal amount, Boolean isDefault, Boolean overdraftEnabled) {
-        AccountResponseDTO account = accountServiceClient.getAccount(accountId);
+        accountServiceClient.getAccount(accountId);
         Bill bill = new Bill(accountId, amount, isDefault, overdraftEnabled);
         return billRepository.save(bill).getBillId();
     }
@@ -63,7 +64,7 @@ public class BillServiceImpl implements BillService {
         bill.setAmount(bill.getAmount().add(amount));
         billRepository.save(bill);
 
-        String email = accountServiceClient.getAccount(bill.getAccountId()).getEmail();
+        String email = accountServiceClient.getAccount(bill.getAccountId()).email();
         depositServiceClient.deposit(billId, new DepositRequestDTO(bill.getBillId(), amount, email));
 
         return new BillDepositResponseDTO(billId, bill.getAccountId(), bill.getAmount(), email,
@@ -74,6 +75,7 @@ public class BillServiceImpl implements BillService {
     @Transactional
     public BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount,
                                       Boolean isDefault, Boolean overdraftEnabled) {
+        accountServiceClient.getAccount(accountId);
         Bill billToUpdate = findBillById(billId);
         billToUpdate.setAccountId(accountId);
         billToUpdate.setAmount(amount);

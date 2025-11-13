@@ -1,6 +1,7 @@
 package org.bank.account.service;
 
 import lombok.RequiredArgsConstructor;
+import org.bank.account.controller.dto.UpdateAccountResponseDTO;
 import org.bank.account.handler.event.AccountCreatedEvent;
 import org.bank.account.handler.event.AccountDeletedEvent;
 import org.bank.dto.response.AccountResponseDTO;
@@ -11,6 +12,7 @@ import org.bank.account.entity.Account;
 import org.bank.account.repository.AccountRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,25 +49,25 @@ public class AccountServiceImpl implements AccountService {
     @Transactional
     public Long createAccount(String name, String email, String phone, List<CreateBillRequestDTO> bills) {
         Account account = new Account(name, email, phone, OffsetDateTime.now());
-        if(accountRepository.existsByEmail(email)) {
-            throw new AccountAlreadyExistsException("Account with email: " + email + " already exists");
+        try {
+            Account savedAccount = accountRepository.save(account);
+            Long accountId = savedAccount.getAccountId();
+            eventPublisher.publishEvent(new AccountCreatedEvent(account.getAccountId(), bills));
+            return accountId;
+        } catch (DataIntegrityViolationException ex) {
+            throw new AccountAlreadyExistsException("Account with email: " + "already exists");
         }
-        Account savedAccount = accountRepository.save(account);
-        Long accountId = savedAccount.getAccountId();
-
-        eventPublisher.publishEvent(new AccountCreatedEvent(account.getAccountId(), bills));
-
-        return accountId;
     }
 
     @Override
     @Transactional
-    public Account updateAccount(Long accountId, String name, String email, String phone) {
+    public UpdateAccountResponseDTO updateAccount(Long accountId, String name, String email, String phone) {
         Account accountToUpdate = getAccountById(accountId);
         accountToUpdate.setName(name);
         accountToUpdate.setEmail(email);
         accountToUpdate.setPhone(phone);
-        return accountRepository.save(accountToUpdate);
+        Account updatedAccount = accountRepository.save(accountToUpdate);
+        return new UpdateAccountResponseDTO(updatedAccount.getAccountId(), updatedAccount.getName(), updatedAccount.getEmail(), updatedAccount.getPhone());
     }
 
     @Override
