@@ -8,7 +8,6 @@ import java.math.BigDecimal;
 public record BillRequestDTO(
         @NotNull(message = "Account id is required") Long accountId,
         @NotNull(message = "Amount is required") @DecimalMin("0.01") BigDecimal amount,
-        @NotNull(message = "IsDefault must be specified") Boolean isDefault,
         @NotNull(message = "Overdraft must be specified") Boolean overdraftEnabled
 ) {}
 

@@ -33,9 +33,16 @@ public class BillServiceImpl implements BillService {
     public List<Long> createBillsForAccount(Long accountId, List<CreateBillRequestDTO> bills) {
         accountServiceClient.getAccount(accountId);
         List<Bill> billsToSave = bills.stream()
-                .map(dto -> new Bill(accountId, dto.amount(),
-                        dto.isDefault(), OffsetDateTime.now(), dto.overdraftEnabled()))
+                .map(dto -> new Bill(accountId, dto.amount(), dto.overdraftEnabled()))
                 .collect(Collectors.toList());
+
+        if (!billsToSave.isEmpty()) {
+            boolean hasBill = billRepository.existsBillByAccountId(accountId);
+            if (!hasBill) {
+                billsToSave.get(0).setIsDefault(true);
+            }
+        }
+
         List<Bill> savedBills = billRepository.saveAll(billsToSave);
 
         return savedBills.stream()
@@ -51,9 +58,14 @@ public class BillServiceImpl implements BillService {
 
     @Override
     @Transactional
-    public Long createBill(Long accountId, BigDecimal amount, Boolean isDefault, Boolean overdraftEnabled) {
+    public Long createBill(Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
         accountServiceClient.getAccount(accountId);
-        Bill bill = new Bill(accountId, amount, isDefault, overdraftEnabled);
+        Bill bill = new Bill(accountId, amount, overdraftEnabled);
+
+        if(!billRepository.existsBillByAccountId(accountId)) {
+            bill.setIsDefault(true);
+        }
+
         return billRepository.save(bill).getBillId();
     }
 
@@ -73,13 +85,11 @@ public class BillServiceImpl implements BillService {
 
     @Override
     @Transactional
-    public BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount,
-                                      Boolean isDefault, Boolean overdraftEnabled) {
+    public BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
         accountServiceClient.getAccount(accountId);
         Bill billToUpdate = findBillById(billId);
         billToUpdate.setAccountId(accountId);
         billToUpdate.setAmount(amount);
-        billToUpdate.setIsDefault(isDefault);
         billToUpdate.setOverdraftEnabled(overdraftEnabled);
         Bill updatedBill = billRepository.save(billToUpdate);
         return createResponseBillDTO(updatedBill);
