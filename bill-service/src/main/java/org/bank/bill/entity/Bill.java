@@ -31,7 +31,7 @@ public class Bill {
 
     @NotNull
     @Column(name = "is_default", nullable = false)
-    private Boolean isDefault;
+    private Boolean isDefault = false;
 
     @CreationTimestamp
     @Column(name = "creation_date", nullable = false, updatable = false)
@@ -41,18 +41,14 @@ public class Bill {
     @Column(name = "overdraft_enabled", nullable = false)
     private Boolean overdraftEnabled;
 
-    public Bill(Long accountId, BigDecimal amount, Boolean isDefault, Boolean isOverdraftEnabled) {
+    public Bill(Long accountId, BigDecimal amount, Boolean isOverdraftEnabled) {
         this.accountId = accountId;
         this.amount = amount;
-        this.isDefault = isDefault;
         this.overdraftEnabled = isOverdraftEnabled;
     }
 
-    public Bill(Long accountId, BigDecimal amount, Boolean isDefault,OffsetDateTime creationDate, Boolean isOverdraftEnabled) {
-        this.accountId = accountId;
-        this.amount = amount;
-        this.isDefault = isDefault;
-        this.creationDate = creationDate;
-        this.overdraftEnabled = isOverdraftEnabled;
+    @PrePersist
+    protected void setCreationDate() {
+        this.creationDate = OffsetDateTime.now();
     }
 }

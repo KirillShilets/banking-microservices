@@ -1,6 +1,7 @@
 package org.bank.bill.controller;
 
 import jakarta.validation.Valid;
+import lombok.AllArgsConstructor;
 import org.bank.bill.service.BillService;
 import org.bank.dto.request.BillRequestDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
@@ -14,14 +15,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/bills")
+@AllArgsConstructor(onConstructor = @__(@Autowired))
 public class BillController {
 
     private final BillService billService;
-
-    @Autowired
-    public BillController(BillService billService) {
-        this.billService = billService;
-    }
 
     @GetMapping("/{billId}")
     public BillResponseDTO getBill(@PathVariable Long billId) {
@@ -30,8 +27,7 @@ public class BillController {
 
     @PostMapping()
     public Long createBill(@Valid @RequestBody BillRequestDTO billRequestDTO) {
-        return billService.createBill(billRequestDTO.accountId(), billRequestDTO.amount(),
-                billRequestDTO.isDefault(), billRequestDTO.overdraftEnabled());
+        return billService.createBill(billRequestDTO.accountId(), billRequestDTO.amount(), billRequestDTO.overdraftEnabled());
     }
 
     @PostMapping("/accounts/{accountId}")
@@ -47,8 +43,7 @@ public class BillController {
 
     @PutMapping("/{billId}")
     public BillResponseDTO updateBill(@PathVariable Long billId, @Valid @RequestBody BillRequestDTO billRequestDTO) {
-        return billService.updateBill(billId, billRequestDTO.accountId(), billRequestDTO.amount(),
-                billRequestDTO.isDefault(), billRequestDTO.overdraftEnabled());
+        return billService.updateBill(billId, billRequestDTO.accountId(), billRequestDTO.amount(), billRequestDTO.overdraftEnabled());
     }
 
     @DeleteMapping("/{billId}")
