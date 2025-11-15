@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
+
+    <changeSet id="002-add-unique-default-bill-index" author="Kirill Shilets">
+        <sql>
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_default_bill_per_account
+                ON bills (account_id)
+                WHERE is_default = true;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

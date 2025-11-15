@@ -14,7 +14,7 @@ import java.time.OffsetDateTime;
 @Setter
 @NoArgsConstructor
 @ToString
-@Table(name = "deposits")
+@Table(name = "deposits", indexes = {@Index(columnList = "email", name = "idx_deposit_email")})
 public class Deposit {
 
     @Id

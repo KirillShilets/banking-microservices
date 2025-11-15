@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
+
+    <changeSet id="001-create-bills-table" author="Kirill Shilets">
+
+        <createTable tableName="bills">
+
+            <column name="bill_id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="amount" type="NUMERIC(19,2)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="is_default" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="creation_date" type="TIMESTAMPTZ">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="overdraft_enabled" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex
+                indexName="idx_bill_account_id"
+                tableName="bills">
+            <column name="account_id"/>
+        </createIndex>
+
+    </changeSet>
+
+</databaseChangeLog>

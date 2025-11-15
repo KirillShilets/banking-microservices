@@ -5,8 +5,11 @@ spring:
       hibernate:
         temp.use_jdbc_metadata_defaults: false
     hibernate:
-      ddl-auto: create
+      ddl-auto: validate
     show-sql: true
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.xml
   datasource:
     platform: postgres
     url: jdbc:postgresql://postgres:5432/deposit_service_database

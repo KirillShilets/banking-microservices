@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.bank.client.AccountServiceClient;
 import org.bank.client.DepositServiceClient;
 import org.bank.dto.request.DepositRequestDTO;
-import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
