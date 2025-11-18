@@ -1,16 +1,21 @@
 FROM gradle:8.10.2-jdk17-alpine AS builder
 WORKDIR /app
 
-COPY . .
+COPY settings.gradle ./
+COPY build.gradle ./
+COPY gradle ./gradle
+COPY common-lib ./common-lib
+COPY notification-service ./notification-service
+
 WORKDIR /app/notification-service
 
 RUN gradle clean bootJar --no-daemon -x test
 
 FROM eclipse-temurin:17-jre-alpine
 
-RUN apk --no-cache add curl
+RUN apk add --no-cache curl \
+    && addgroup -S app && adduser -S app -G app
 
-RUN addgroup -S app && adduser -S app -G app
 USER app
 WORKDIR /app
 

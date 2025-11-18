@@ -1,14 +1,19 @@
 .git
 .gitignore
 
-.dockerignore
-Dockerfile
-
+.idea/
+out/
 build/
-.gradle
-.idea
-out
+.gradle/
+.cache/
+
+**/*.class
 
 *.iml
 *.log
 .env*
+
+*.md
+!README*.md
+README-secret.md
+

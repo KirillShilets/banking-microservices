@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: postgres
     environment:
       POSTGRES_USER: bank_user
@@ -21,25 +21,23 @@ services:
   config-service:
     build:
       context: ./config-service
-      dockerfile: Dockerfile
     container_name: config-service
     ports:
       - "8001:8001"
     environment:
       SPRING_PROFILES_ACTIVE: native
-      SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS: file:/config-repo
       SPRING_SECURITY_USER_NAME: user
       SPRING_SECURITY_USER_PASSWORD: bankconfigadmin123
     volumes:
-      - C:\Users\Administrator\IdeaProjects\spring-cloud-banking-system\config-service\src\main\resources\services:/config-repo
-    networks:
-      - bank-net
+      - ./config-service/src/main/resources/services:/app/config
     healthcheck:
-      test: [ "CMD", "curl", "-f", "-u", "user:bankconfigadmin123","http://localhost:8001/actuator/health" ]
+      test: ["CMD", "curl", "-f", "-u", "user:bankconfigadmin123", "http://localhost:8001/actuator/health" ]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - bank-net
 
   discovery-service:
     build:
@@ -204,7 +202,7 @@ services:
     networks:
       - bank-net
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8989/actuator/health" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8989/actuator/health" ]
       interval: 3s
       timeout: 5s
       retries: 10
