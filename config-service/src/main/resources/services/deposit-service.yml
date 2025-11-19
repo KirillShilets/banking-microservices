@@ -1,31 +1,12 @@
+server:
+  port: 8080
+
 spring:
-  jpa:
-    database: POSTGRESQL
-    properties:
-      hibernate:
-        temp.use_jdbc_metadata_defaults: false
-    hibernate:
-      ddl-auto: validate
-    show-sql: true
-  liquibase:
-    enabled: true
-    change-log: classpath:db/changelog/db.changelog-master.xml
   datasource:
-    platform: postgres
     url: jdbc:postgresql://postgres:5432/deposit_service_database
     username: deposit_service_admin
     password: depositserviceadmin
     driver-class-name: org.postgresql.Driver
-
-eureka:
-  instance:
-    hostname: localhost
-  client:
-    register-with-eureka: true
-    fetch-registry: true
-    healthcheck:
-      enabled: true
-
-info:
-  application:
-    name: Deposit Service
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.xml

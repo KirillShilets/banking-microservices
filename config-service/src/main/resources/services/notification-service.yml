@@ -14,5 +14,5 @@ spring:
     password: uigi yook pmpm jwdx
     smtp-auth: true
     starttls-enable: true
-    debug: true,
+    debug: true
     from: checkmailbanksystem@gmail.com

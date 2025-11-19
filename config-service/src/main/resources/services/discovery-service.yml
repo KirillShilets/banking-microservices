@@ -1,19 +1,9 @@
 server:
   port: 8761
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-
-info:
-  application:
-    name: Discovery Service
-    description: Central Service Registry (Eureka)
-    version: 1.0.0
-
 eureka:
   client:
     register-with-eureka: false
     fetch-registry: false
+  server:
+    wait-time-in-ms-when-sync-empty: 0

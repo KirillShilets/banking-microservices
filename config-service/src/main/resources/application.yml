@@ -3,16 +3,13 @@ spring:
     config:
       server:
         native:
-          search-locations: file:/app/config
+          search-locations: classpath:/services/, file:./config/
       enabled: false
   profiles:
     active: native
   security:
     user:
       password: bankconfigadmin123
-
-server:
-  port: 8001
 
 management:
    endpoints:
@@ -22,3 +19,6 @@ management:
    endpoint:
      health:
        show-details: always
+
+server:
+  port: 8001
