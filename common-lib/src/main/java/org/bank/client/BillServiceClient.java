@@ -13,52 +13,27 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @FeignClient(name = "bill-service")
+@Retryable(
+        value = {feign.FeignException.ServiceUnavailable.class},
+        maxAttempts = 5,
+        backoff = @Backoff(delay = 2000)
+)
 public interface BillServiceClient {
     @PostMapping("/bills/accounts/{accountId}")
-    @Retryable(
-            value = {feign.FeignException.ServiceUnavailable.class},
-            maxAttempts = 5,
-            backoff = @Backoff(delay = 2000)
-    )
     List<Long> createBillsForAccount(@PathVariable("accountId") Long accountId, @Valid @RequestBody List<CreateBillRequestDTO> bills);
 
     @PostMapping("/bills/deposits/{billId}")
-    @Retryable(
-            value = {feign.FeignException.ServiceUnavailable.class},
-            maxAttempts = 5,
-            backoff = @Backoff(delay = 2000)
-    )
     BillDepositResponseDTO depositBill(@PathVariable("billId") Long billId, @Valid @RequestBody DepositRequestDTO depositRequestDTO);
 
     @GetMapping("/bills/accounts/{accountId}")
-    @Retryable(
-            value = {feign.FeignException.ServiceUnavailable.class},
-            maxAttempts = 5,
-            backoff = @Backoff(delay = 2000)
-    )
     List<BillResponseDTO> getBillsByAccountId(@PathVariable("accountId") Long accountId);
 
-    @DeleteMapping("/bills/{billId}")
-    @Retryable(
-            value = {feign.FeignException.ServiceUnavailable.class},
-            maxAttempts = 5,
-            backoff = @Backoff(delay = 2000)
-    )
+    @GetMapping("/bills/{billId}")
     BillResponseDTO getBill(@PathVariable("billId") Long billId);
 
-    @PostMapping("/bills/{billId}")
-    @Retryable(
-            value = {feign.FeignException.ServiceUnavailable.class},
-            maxAttempts = 5,
-            backoff = @Backoff(delay = 2000)
-    )
+    @DeleteMapping("/bills/{billId}")
     void deleteBill(@PathVariable("billId") Long billId);
 
     @DeleteMapping("/bills/accounts/{accountId}")
-    @Retryable(
-            value = {feign.FeignException.ServiceUnavailable.class},
-            maxAttempts = 5,
-            backoff = @Backoff(delay = 2000)
-    )
     void deleteBillsByAccountId(@PathVariable("accountId") Long accountId);
 }

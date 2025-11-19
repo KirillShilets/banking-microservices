@@ -33,10 +33,3 @@ spring:
             wiretap: true
           httpserver:
             wiretap: true
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-      healthcheck:
-        enabled: true

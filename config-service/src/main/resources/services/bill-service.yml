@@ -1,28 +1,12 @@
+server:
+  port: 8082
+
 spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/bill_service_database
     username: bill_service_admin
     password: billserviceadmin
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
+    driver-class-name: org.postgresql.Driver
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.xml
-  mvc:
-    throw-exception-if-no-handler-found: true
-  web:
-    resources:
-      add-mappings: false
-
-server:
-  port: 8082
-
-eureka:
-  client:
-    healthcheck:
-      enabled: true

@@ -8,56 +8,69 @@ import org.bank.dto.request.CreateBillRequestDTO;
 import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.net.URI;
 import java.util.List;
 
 @RestController
 @RequestMapping("/bills")
-@AllArgsConstructor(onConstructor = @__(@Autowired))
+@AllArgsConstructor()
 public class BillController {
 
     private final BillService billService;
 
     @GetMapping("/{billId}")
-    public BillResponseDTO getBill(@PathVariable Long billId) {
-        return billService.getBillById(billId);
+    public ResponseEntity<BillResponseDTO> getBill(@PathVariable Long billId) {
+        return ResponseEntity.ok(billService.getBillById(billId));
     }
 
     @PostMapping()
-    public Long createBill(@Valid @RequestBody BillRequestDTO billRequestDTO) {
-        return billService.createBill(billRequestDTO.accountId(), billRequestDTO.amount(), billRequestDTO.overdraftEnabled());
+    public ResponseEntity<Long> createBill(@Valid @RequestBody BillRequestDTO dto) {
+        Long billId = billService.createBill(dto.accountId(), dto.amount(), dto.overdraftEnabled());
+        URI location = ServletUriComponentsBuilder
+                .fromCurrentRequestUri()
+                .path("/{id}")
+                .buildAndExpand(billId)
+                .toUri();
+
+        return ResponseEntity.created(location).body(billId);
     }
 
     @PostMapping("/accounts/{accountId}")
-    public List<Long> createBillsForAccount(@PathVariable Long accountId,
+    public ResponseEntity<List<Long>> createBillsForAccount(@PathVariable Long accountId,
                                             @Valid @RequestBody List<CreateBillRequestDTO> bills) {
-        return billService.createBillsForAccount(accountId, bills);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(billService.createBillsForAccount(accountId, bills));
     }
 
     @PostMapping("/deposits/{billId}")
-    public BillDepositResponseDTO depositBill(@PathVariable Long billId, @Valid @RequestBody DepositRequestDTO depositRequestDTO) {
-        return billService.depositBill(billId, depositRequestDTO.amount());
+    public ResponseEntity<BillDepositResponseDTO> depositBill(@PathVariable Long billId, @Valid @RequestBody DepositRequestDTO depositRequestDTO) {
+        return ResponseEntity.ok(billService.depositBill(billId, depositRequestDTO.amount()));
     }
 
     @PutMapping("/{billId}")
-    public BillResponseDTO updateBill(@PathVariable Long billId, @Valid @RequestBody BillRequestDTO billRequestDTO) {
-        return billService.updateBill(billId, billRequestDTO.accountId(), billRequestDTO.amount(), billRequestDTO.overdraftEnabled());
+    public ResponseEntity<BillResponseDTO> updateBill(@PathVariable Long billId, @Valid @RequestBody BillRequestDTO billRequestDTO) {
+        return ResponseEntity.ok(billService.updateBill(billId, billRequestDTO.accountId(), billRequestDTO.amount(), billRequestDTO.overdraftEnabled()));
     }
 
     @DeleteMapping("/{billId}")
-    public BillResponseDTO deleteBill(@PathVariable Long billId) {
-        return billService.deleteBill(billId);
+    public ResponseEntity<Void> deleteBill(@PathVariable Long billId) {
+        billService.deleteBill(billId);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/accounts/{accountId}")
-    public void deleteBillsByAccountId(@PathVariable Long accountId) {
+    public ResponseEntity<Void> deleteBillsByAccountId(@PathVariable Long accountId) {
         billService.deleteBillsByAccountId(accountId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/accounts/{accountId}")
-    public List<BillResponseDTO> getBillsByAccountId(@PathVariable Long accountId) {
-        return billService.getBillsByAccountId(accountId);
+    public ResponseEntity<List<BillResponseDTO>> getBillsByAccountId(@PathVariable Long accountId) {
+        return ResponseEntity.ok(billService.getBillsByAccountId(accountId));
     }
 }
