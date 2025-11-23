@@ -1,7 +1,11 @@
 FROM gradle:8.10.2-jdk17-alpine AS builder
 WORKDIR /app
 
-COPY . .
+COPY build.gradle ./
+RUN gradle dependencies --no-daemon
+
+COPY src src
+
 RUN gradle clean bootJar --no-daemon -x test
 
 FROM eclipse-temurin:17-jre-alpine

@@ -22,8 +22,8 @@ public interface BillServiceClient {
     @PostMapping("/bills/accounts/{accountId}")
     List<Long> createBillsForAccount(@PathVariable("accountId") Long accountId, @Valid @RequestBody List<CreateBillRequestDTO> bills);
 
-    @PostMapping("/bills/deposits/{billId}")
-    BillDepositResponseDTO depositBill(@PathVariable("billId") Long billId, @Valid @RequestBody DepositRequestDTO depositRequestDTO);
+    @PostMapping("/bills/deposits/")
+    BillDepositResponseDTO depositBill(@Valid @RequestBody DepositRequestDTO depositRequestDTO);
 
     @GetMapping("/bills/accounts/{accountId}")
     List<BillResponseDTO> getBillsByAccountId(@PathVariable("accountId") Long accountId);

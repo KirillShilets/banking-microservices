@@ -1,11 +1,15 @@
 FROM gradle:8.10.2-jdk17-alpine AS builder
 WORKDIR /app
 
-COPY settings.gradle ./
-COPY build.gradle ./
+COPY settings.gradle build.gradle ./
 COPY gradle ./gradle
-COPY common-lib ./common-lib
-COPY deposit-service ./deposit-service
+COPY common-lib/build.gradle ./common-lib/build.gradle
+COPY deposit-service/build.gradle ./deposit-service/build.gradle
+
+RUN gradle dependencies --no-daemon
+
+COPY common-lib/src ./common-lib/src
+COPY deposit-service/src ./deposit-service/src
 
 WORKDIR /app/deposit-service
 

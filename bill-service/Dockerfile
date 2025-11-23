@@ -3,8 +3,13 @@ WORKDIR /app
 
 COPY settings.gradle build.gradle ./
 COPY gradle ./gradle
-COPY common-lib ./common-lib
-COPY bill-service ./bill-service
+COPY common-lib/build.gradle ./common-lib/build.gradle
+COPY bill-service/build.gradle ./bill-service/build.gradle
+
+RUN gradle dependencies --no-daemon
+
+COPY common-lib/src ./common-lib/src
+COPY bill-service/src ./bill-service/src
 
 WORKDIR /app/bill-service
 
