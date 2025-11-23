@@ -11,12 +11,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 @FeignClient(name = "deposit-service")
+@Retryable(
+        value = {feign.FeignException.ServiceUnavailable.class},
+        maxAttempts = 5,
+        backoff = @Backoff(delay = 2000)
+)
 public interface DepositServiceClient {
-    @PostMapping("/deposits/{billId}")
-    @Retryable(
-            value = {feign.FeignException.ServiceUnavailable.class},
-            maxAttempts = 5,
-            backoff = @Backoff(delay = 2000)
-    )
-    DepositResponseDTO deposit(@PathVariable("billId") Long fromBillId, @Valid @RequestBody DepositRequestDTO depositRequestDTO);
+    @PostMapping("/deposits")
+    DepositResponseDTO saveDeposit(@Valid @RequestBody DepositRequestDTO depositRequestDTO);
 }

@@ -17,7 +17,7 @@ import java.net.URI;
 
 @RestController
 @RequestMapping("/accounts")
-@RequiredArgsConstructor()
+@RequiredArgsConstructor
 public class AccountController {
 
     private final AccountService accountService;
@@ -35,7 +35,6 @@ public class AccountController {
                 .path("/{id}")
                 .buildAndExpand(accountId)
                 .toUri();
-
         return ResponseEntity.created(location).body(accountId);
     }
 

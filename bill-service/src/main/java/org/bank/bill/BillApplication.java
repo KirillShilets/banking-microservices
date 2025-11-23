@@ -8,6 +8,8 @@ import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
+import org.springframework.retry.annotation.EnableRetry;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
@@ -17,6 +19,8 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 })
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = "org.bank.client")
+@EnableRetry
+@EnableAsync
 public class BillApplication {
     public static void main(String[] args) {
         SpringApplication.run(BillApplication.class, args);

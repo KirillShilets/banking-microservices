@@ -6,11 +6,10 @@ import org.bank.account.handler.event.AccountCreatedEvent;
 import org.bank.account.handler.event.AccountDeletedEvent;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
-import org.bank.exception.AccountAlreadyExistsException;
+import org.bank.exception.AlreadyExistsException;
 import org.bank.exception.NotFoundException;
 import org.bank.account.entity.Account;
 import org.bank.account.repository.AccountRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -20,18 +19,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor(onConstructor_ = {@Autowired})
+@RequiredArgsConstructor
 public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
     private final ApplicationEventPublisher eventPublisher;
-
-    @Override
-    @Transactional(readOnly = true)
-    public Account getAccountById(Long accountId) {
-        return accountRepository.findById(accountId)
-                .orElseThrow(() -> new NotFoundException("Unable to find account with id: " + accountId));
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -55,7 +47,7 @@ public class AccountServiceImpl implements AccountService {
             eventPublisher.publishEvent(new AccountCreatedEvent(account.getAccountId(), bills));
             return accountId;
         } catch (DataIntegrityViolationException ex) {
-            throw new AccountAlreadyExistsException("Account with email: " + "already exists");
+            throw new AlreadyExistsException("Account with email: " + email + "already exists");
         }
     }
 
@@ -73,10 +65,13 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public void deleteAccount(Long accountId) {
-        if(!accountRepository.existsById(accountId)) {
-            throw new NotFoundException("Unable to find account with id: " + accountId);
-        }
-        accountRepository.deleteAccountById(accountId);
+        Account account = getAccountById(accountId);
+        accountRepository.delete(account);
         eventPublisher.publishEvent(new AccountDeletedEvent(accountId));
+    }
+
+    private Account getAccountById(Long accountId) {
+        return accountRepository.findById(accountId)
+                .orElseThrow(() -> new NotFoundException("Unable to find account with id: " + accountId));
     }
 }

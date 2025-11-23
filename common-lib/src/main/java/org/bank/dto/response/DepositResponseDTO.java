@@ -6,8 +6,8 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 public record DepositResponseDTO(
-        BigDecimal amount,
         Long billId,
+        BigDecimal amount,
         String email,
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssXXX")
         OffsetDateTime creationDate

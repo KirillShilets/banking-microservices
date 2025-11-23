@@ -6,9 +6,5 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 public interface AccountRepository extends JpaRepository<Account, Long> {
-    Boolean existsByEmail(String email);
 
-    @Modifying
-    @Query("DELETE FROM Account a WHERE a.accountId = :accountId")
-    void deleteAccountById(long accountId);
 }
