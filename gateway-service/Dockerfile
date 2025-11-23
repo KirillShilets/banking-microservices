@@ -1,13 +1,15 @@
 FROM gradle:8.10.2-jdk17-alpine AS builder
 WORKDIR /app
 
-COPY settings.gradle ./
-COPY build.gradle ./
+COPY settings.gradle build.gradle ./
 COPY gradle ./gradle
-COPY gateway-service ./gateway-service
+COPY gateway-service/build.gradle ./gateway-service/
+
+RUN gradle dependencies --no-daemon
+
+COPY gateway-service/src ./gateway-service/src
 
 WORKDIR /app/gateway-service
-
 RUN gradle clean bootJar --no-daemon -x test
 
 FROM eclipse-temurin:17-jre-alpine
