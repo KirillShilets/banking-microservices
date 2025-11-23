@@ -2,6 +2,7 @@ package org.bank.bill.controller;
 
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.bank.bill.service.BillService;
 import org.bank.dto.request.BillRequestDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
@@ -18,17 +19,22 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/bills")
-@AllArgsConstructor()
+@RequiredArgsConstructor
 public class BillController {
 
     private final BillService billService;
 
     @GetMapping("/{billId}")
     public ResponseEntity<BillResponseDTO> getBill(@PathVariable Long billId) {
-        return ResponseEntity.ok(billService.getBillById(billId));
+        return ResponseEntity.ok(billService.getBill(billId));
     }
 
-    @PostMapping()
+    @GetMapping("/accounts/{accountId}")
+    public ResponseEntity<List<BillResponseDTO>> getBillsByAccountId(@PathVariable Long accountId) {
+        return ResponseEntity.ok(billService.getBillsByAccountId(accountId));
+    }
+
+    @PostMapping
     public ResponseEntity<Long> createBill(@Valid @RequestBody BillRequestDTO dto) {
         Long billId = billService.createBill(dto.accountId(), dto.amount(), dto.overdraftEnabled());
         URI location = ServletUriComponentsBuilder
@@ -47,14 +53,14 @@ public class BillController {
                 .body(billService.createBillsForAccount(accountId, bills));
     }
 
-    @PostMapping("/deposits/{billId}")
-    public ResponseEntity<BillDepositResponseDTO> depositBill(@PathVariable Long billId, @Valid @RequestBody DepositRequestDTO depositRequestDTO) {
-        return ResponseEntity.ok(billService.depositBill(billId, depositRequestDTO.amount()));
-    }
-
     @PutMapping("/{billId}")
     public ResponseEntity<BillResponseDTO> updateBill(@PathVariable Long billId, @Valid @RequestBody BillRequestDTO billRequestDTO) {
         return ResponseEntity.ok(billService.updateBill(billId, billRequestDTO.accountId(), billRequestDTO.amount(), billRequestDTO.overdraftEnabled()));
+    }
+
+    @PostMapping("/deposits")
+    public ResponseEntity<BillDepositResponseDTO> depositBill(@Valid @RequestBody DepositRequestDTO dto) {
+        return ResponseEntity.ok(billService.depositBill(dto.billId(), dto.amount(), dto.email()));
     }
 
     @DeleteMapping("/{billId}")
@@ -67,10 +73,5 @@ public class BillController {
     public ResponseEntity<Void> deleteBillsByAccountId(@PathVariable Long accountId) {
         billService.deleteBillsByAccountId(accountId);
         return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/accounts/{accountId}")
-    public ResponseEntity<List<BillResponseDTO>> getBillsByAccountId(@PathVariable Long accountId) {
-        return ResponseEntity.ok(billService.getBillsByAccountId(accountId));
     }
 }

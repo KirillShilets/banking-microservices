@@ -1,6 +1,7 @@
 package org.bank.bill.service;
 
 import lombok.RequiredArgsConstructor;
+import org.bank.bill.handler.event.DepositEvent;
 import org.bank.client.AccountServiceClient;
 import org.bank.client.DepositServiceClient;
 import org.bank.dto.request.DepositRequestDTO;
@@ -11,6 +12,7 @@ import org.bank.exception.NotFoundException;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.repository.BillRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +26,33 @@ public class BillServiceImpl implements BillService {
 
     private final BillRepository billRepository;
     private final AccountServiceClient accountServiceClient;
-    private final DepositServiceClient depositServiceClient;
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Override
+    @Transactional(readOnly = true)
+    public BillResponseDTO getBill(Long billId) {
+        return createResponseBillDTO(getBillById(billId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BillResponseDTO> getBillsByAccountId(Long accountId) {
+        return billRepository.getBillsByAccountId(accountId).stream()
+                .map(this::createResponseBillDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public Long createBill(Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
+        accountServiceClient.getAccount(accountId);
+        Bill bill = new Bill(accountId, amount, overdraftEnabled);
+        if(!billRepository.existsBillByAccountId(accountId)) {
+            bill.setIsDefault(true);
+        }
+
+        return billRepository.save(bill).getBillId();
+    }
 
     @Override
     @Transactional
@@ -41,51 +69,16 @@ public class BillServiceImpl implements BillService {
             }
         }
 
-        List<Bill> savedBills = billRepository.saveAll(billsToSave);
-
-        return savedBills.stream()
+        return billRepository.saveAll(billsToSave).stream()
                 .map(Bill::getBillId)
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public BillResponseDTO getBillById(Long billId) {
-        return createResponseBillDTO(findBillById(billId));
-    }
-
-    @Override
-    @Transactional
-    public Long createBill(Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
-        accountServiceClient.getAccount(accountId);
-        Bill bill = new Bill(accountId, amount, overdraftEnabled);
-
-        if(!billRepository.existsBillByAccountId(accountId)) {
-            bill.setIsDefault(true);
-        }
-
-        return billRepository.save(bill).getBillId();
-    }
-
-    @Override
-    @Transactional
-    public BillDepositResponseDTO depositBill(Long billId, BigDecimal amount) {
-        Bill bill = findBillById(billId);
-        bill.setAmount(bill.getAmount().add(amount));
-        billRepository.save(bill);
-
-        String email = accountServiceClient.getAccount(bill.getAccountId()).email();
-        depositServiceClient.deposit(billId, new DepositRequestDTO(bill.getBillId(), amount, email));
-
-        return new BillDepositResponseDTO(billId, bill.getAccountId(), bill.getAmount(), email,
-                bill.getIsDefault(), bill.getOverdraftEnabled(), bill.getCreationDate());
     }
 
     @Override
     @Transactional
     public BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
         accountServiceClient.getAccount(accountId);
-        Bill billToUpdate = findBillById(billId);
+        Bill billToUpdate = getBillById(billId);
         billToUpdate.setAccountId(accountId);
         billToUpdate.setAmount(amount);
         billToUpdate.setOverdraftEnabled(overdraftEnabled);
@@ -95,10 +88,23 @@ public class BillServiceImpl implements BillService {
 
     @Override
     @Transactional
-    public BillResponseDTO deleteBill(Long billId) {
-        Bill bill = findBillById(billId);
-        billRepository.delete(bill);
-        return createResponseBillDTO(bill);
+    public BillDepositResponseDTO depositBill(Long billId, BigDecimal amount, String email) {
+        Bill bill = getBillById(billId);
+        bill.setAmount(bill.getAmount().add(amount));
+        billRepository.save(bill);
+
+        eventPublisher.publishEvent(new DepositEvent(new DepositRequestDTO(bill.getBillId(), amount, email)));
+        return new BillDepositResponseDTO(billId, bill.getAccountId(), bill.getAmount(), email,
+                bill.getIsDefault(), bill.getOverdraftEnabled(), bill.getCreationDate());
+    }
+
+    @Override
+    @Transactional
+    public void deleteBill(Long billId) {
+        if(!billRepository.existsBillByBillId(billId)) {
+            throw new NotFoundException("Unable to find bill with id: " + billId);
+        }
+        billRepository.deleteById(billId);
     }
 
     @Override
@@ -107,16 +113,7 @@ public class BillServiceImpl implements BillService {
         billRepository.deleteBillsByAccountId(accountId);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<BillResponseDTO> getBillsByAccountId(Long accountId) {
-        return billRepository.getBillsByAccountId(accountId)
-                .stream()
-                .map(this::createResponseBillDTO)
-                .collect(Collectors.toList());
-    }
-
-    private Bill findBillById(Long billId) {
+    private Bill getBillById(Long billId) {
         return billRepository.findById(billId)
                 .orElseThrow(() -> new NotFoundException("Unable to find bill with id: " + billId));
     }

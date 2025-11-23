@@ -9,11 +9,11 @@ import java.util.List;
 
 public interface BillService {
     List<Long> createBillsForAccount(Long accountId, List<CreateBillRequestDTO> bills);
-    BillResponseDTO getBillById(Long billId);
+    BillResponseDTO getBill(Long billId);
     Long createBill(Long accountId, BigDecimal amount, Boolean overdraftEnabled);
-    BillDepositResponseDTO depositBill(Long accountId, BigDecimal amount);
+    BillDepositResponseDTO depositBill(Long billId, BigDecimal amount, String email);
     BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount, Boolean overdraftEnabled);
-    BillResponseDTO deleteBill(Long billId);
+    void deleteBill(Long billId);
     void deleteBillsByAccountId(Long accountId);
     List<BillResponseDTO> getBillsByAccountId(Long accountId);
 }
