@@ -1,35 +1,32 @@
 package org.bank.notification.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.NotificationResponseDTO;
 import org.bank.exception.NotificationSendException;
-import org.bank.notification.config.MailProperties;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
 
     private final JavaMailSender mailSender;
-    private final MailProperties mailProperties;
 
-    @Autowired
-    public NotificationServiceImpl(JavaMailSender mailSender,MailProperties mailProperties) {
-        this.mailSender = mailSender;
-        this.mailProperties = mailProperties;
-    }
-
+    @Value("${spring.mail.username}")
+    private String senderEmail;
 
     @Override
     public NotificationResponseDTO sendDepositNotification(DepositRequestDTO requestDTO) {
         log.info("Sending deposit notification to {}", requestDTO.email());
+
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(requestDTO.email());
-        message.setFrom(mailProperties.getFrom());
+        message.setFrom(senderEmail);
         message.setSubject("Deposit Notification");
         message.setText(String.format(
                 "Your deposit was successful.\nAmount: %s",
