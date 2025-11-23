@@ -17,10 +17,10 @@ public class DepositController {
 
     private final DepositService depositService;
 
-    @PostMapping("/{billId}")
-    public ResponseEntity<DepositResponseDTO> deposit(@PathVariable("billId") Long fromBillId, @Valid @RequestBody DepositRequestDTO dto) {
+    @PostMapping
+    public ResponseEntity<DepositResponseDTO> saveDeposit(@Valid @RequestBody DepositRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(depositService.deposit(fromBillId, dto.billId(), dto.amount(), dto.email()));
+                .body(depositService.saveDeposit(dto.billId(), dto.amount(), dto.email()));
     }
 
     @GetMapping("/{depositId}")
