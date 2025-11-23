@@ -3,7 +3,9 @@ package org.bank.client.exception;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.Response;
+import feign.RetryableException;
 import feign.codec.ErrorDecoder;
+import org.bank.exception.AlreadyExistsException;
 import org.bank.exception.BadRequestException;
 import org.bank.exception.InternalServerException;
 import org.bank.exception.NotFoundException;
@@ -43,6 +45,14 @@ public class FeignErrorDecoder implements ErrorDecoder {
         return switch (status) {
             case NOT_FOUND -> new NotFoundException(message);
             case BAD_REQUEST -> new BadRequestException(message);
+            case CONFLICT -> new AlreadyExistsException(message);
+            case SERVICE_UNAVAILABLE -> new RetryableException(
+                    status.value(),
+                    message,
+                    response.request().httpMethod(),
+                    1L,
+                    response.request()
+            );
             default -> new InternalServerException(message);
         };
     }
