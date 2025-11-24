@@ -8,10 +8,12 @@ import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
+import org.bank.exception.BadRequestException;
 import org.bank.exception.NotFoundException;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.repository.BillRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +23,15 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor(onConstructor_ = {@Autowired})
+@RequiredArgsConstructor
 public class BillServiceImpl implements BillService {
 
     private final BillRepository billRepository;
     private final AccountServiceClient accountServiceClient;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Value("${app.deposit.min-amount:2.60}")
+    private BigDecimal minDepositAmount;
 
     @Override
     @Transactional(readOnly = true)
@@ -89,6 +94,10 @@ public class BillServiceImpl implements BillService {
     @Override
     @Transactional
     public BillDepositResponseDTO depositBill(Long billId, BigDecimal amount, String email) {
+        if(amount.compareTo(minDepositAmount) < 0) {
+            throw new BadRequestException("Deposit amount " + amount +  " is less than minimum required: " + minDepositAmount);
+        }
+
         Bill bill = getBillById(billId);
         bill.setAmount(bill.getAmount().add(amount));
         billRepository.save(bill);

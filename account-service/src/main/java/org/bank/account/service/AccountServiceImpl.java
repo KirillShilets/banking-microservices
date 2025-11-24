@@ -47,7 +47,7 @@ public class AccountServiceImpl implements AccountService {
             eventPublisher.publishEvent(new AccountCreatedEvent(account.getAccountId(), bills));
             return accountId;
         } catch (DataIntegrityViolationException ex) {
-            throw new AlreadyExistsException("Account with email: " + email + "already exists");
+            throw new AlreadyExistsException("Account with email: " + email + " already exists");
         }
     }
 

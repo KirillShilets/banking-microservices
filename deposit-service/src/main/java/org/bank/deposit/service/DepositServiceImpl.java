@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.bank.deposit.entity.Deposit;
 import org.bank.deposit.repository.DepositRepository;
 import org.bank.dto.response.DepositResponseDTO;
+import org.bank.exception.BadRequestException;
 import org.bank.exception.NotFoundException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

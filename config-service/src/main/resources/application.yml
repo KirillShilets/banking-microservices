@@ -9,7 +9,7 @@ spring:
     active: native
   security:
     user:
-      password: bankconfigadmin123
+      password: ${SPRING_SECURITY_PASSWORD}
 
 management:
    endpoints:

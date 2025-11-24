@@ -4,9 +4,13 @@ server:
 spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/bill_service_database
-    username: bill_service_admin
-    password: billserviceadmin
+    username: ${BILL_DB_USER}
+    password: ${BILL_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.xml
+
+app:
+  deposit:
+    min-amount: ${DEPOSIT_MIN_AMOUNT:2.60}

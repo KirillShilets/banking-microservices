@@ -4,8 +4,8 @@ server:
 spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/deposit_service_database
-    username: deposit_service_admin
-    password: depositserviceadmin
+    username: ${DEPOSIT_DB_USER}
+    password: ${DEPOSIT_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   liquibase:
     enabled: true
