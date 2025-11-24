@@ -6,5 +6,5 @@ spring:
   cloud:
     config:
       fail-fast: true
-      username: user
-      password: bankconfigadmin123
+      username: ${SPRING_SECURITY_USER}
+      password: ${SPRING_SECURITY_PASSWORD}

@@ -4,8 +4,8 @@ server:
 spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/account_service_database
-    username: account_service_admin
-    password: accountserviceadmin
+    username: ${ACCOUNT_DB_USER}
+    password: ${ACCOUNT_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   liquibase:
     enabled: true
