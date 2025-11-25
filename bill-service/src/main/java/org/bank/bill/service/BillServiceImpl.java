@@ -2,9 +2,11 @@ package org.bank.bill.service;
 
 import lombok.RequiredArgsConstructor;
 import org.bank.bill.handler.event.DepositEvent;
+import org.bank.bill.handler.event.NotificationEvent;
 import org.bank.client.AccountServiceClient;
 import org.bank.client.DepositServiceClient;
 import org.bank.dto.request.DepositRequestDTO;
+import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
@@ -100,9 +102,15 @@ public class BillServiceImpl implements BillService {
 
         Bill bill = getBillById(billId);
         bill.setAmount(bill.getAmount().add(amount));
-        billRepository.save(bill);
 
-        eventPublisher.publishEvent(new DepositEvent(new DepositRequestDTO(bill.getBillId(), amount, email)));
+        AccountResponseDTO account = accountServiceClient.getAccount(bill.getAccountId());
+        if(!account.email().equalsIgnoreCase(email)) {
+            throw new BadRequestException("Provided email: " + email + " does not belong to account owner");
+        }
+
+        billRepository.save(bill);
+        eventPublisher.publishEvent(new NotificationEvent(billId, amount, email));
+        eventPublisher.publishEvent(new DepositEvent(billId, amount, email));
         return new BillDepositResponseDTO(billId, bill.getAccountId(), bill.getAmount(), email,
                 bill.getIsDefault(), bill.getOverdraftEnabled(), bill.getCreationDate());
     }

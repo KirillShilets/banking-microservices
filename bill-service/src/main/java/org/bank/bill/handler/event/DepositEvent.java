@@ -1,7 +1,7 @@
 package org.bank.bill.handler.event;
 
-import org.bank.dto.request.DepositRequestDTO;
+import java.math.BigDecimal;
 
-public record DepositEvent(DepositRequestDTO dto) {
+public record DepositEvent(Long billId, BigDecimal amount, String email) {
 
 }

@@ -25,10 +25,6 @@ spring:
               uri: lb://deposit-service
               predicates:
                 - Path=/deposits/**
-            - id: notification_service_route
-              uri: lb://notification-service
-              predicates:
-                - Path=/notifications/**
           httpclient:
             wiretap: true
           httpserver:
