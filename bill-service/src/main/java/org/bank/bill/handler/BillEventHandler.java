@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bank.bill.handler.event.DepositEvent;
 import org.bank.client.DepositServiceClient;
+import org.bank.dto.request.DepositRequestDTO;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -20,7 +21,7 @@ public class BillEventHandler {
     public void handleDepositEvent(DepositEvent event) {
         log.info("Received deposit event");
         try {
-            depositServiceClient.saveDeposit(event.dto());
+            depositServiceClient.saveDeposit(new DepositRequestDTO(event.billId(), event.amount(), event.email()));
             log.info("Successfully sent deposit info to DepositService");
         } catch (Exception e) {
             log.error("Failed to sync deposit to DepositService after retries. " +

@@ -165,8 +165,6 @@ services:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
-    ports:
-      - "${NOTIFICATION_SERVICE_PORT}:9999"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
       SPRING_CONFIG_IMPORT: configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001
