@@ -1,0 +1,29 @@
+plugins {
+    id 'java-library'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'org.bank'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.boot:spring-boot-dependencies:3.5.6"
+    }
+}
+
+dependencies {
+    api 'org.springframework.boot:spring-boot-starter-test'
+    api 'org.springframework.boot:spring-boot-testcontainers'
+    api 'org.testcontainers:postgresql'
+    api 'org.testcontainers:junit-jupiter'
+    api 'org.testcontainers:testcontainers:2.0.2'
+}
+
+test {
+    useJUnitPlatform()
+}
