@@ -51,6 +51,7 @@ class BillIntegrationTest {
     private static final BigDecimal AMOUNT_200 = new BigDecimal("200.00");
     private static final BigDecimal DEPOSIT_AMOUNT_10 = new BigDecimal("10.00");
     private static final BigDecimal TINY_AMOUNT = new BigDecimal("1.00");
+    private static final OffsetDateTime DEFAULT_TIME = OffsetDateTime.parse("2025-12-12T12:00:00Z");
 
     @Autowired
     private MockMvc mockMvc;
@@ -73,7 +74,7 @@ class BillIntegrationTest {
     @BeforeEach
     void setup() {
         when(accountServiceClient.getAccount(anyLong()))
-                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, OffsetDateTime.now()));
+                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
     }
 
     @AfterEach

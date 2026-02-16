@@ -38,12 +38,9 @@ dependencies {
     runtimeOnly "org.postgresql:postgresql"
     implementation 'org.liquibase:liquibase-core'
 
-    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
-    testImplementation "org.springframework.boot:spring-boot-starter-test"
-    testImplementation "com.h2database:h2"
-    testImplementation "org.mockito:mockito-core"
-    testImplementation "org.assertj:assertj-core"
-    testImplementation "org.junit.jupiter:junit-jupiter"
+    testImplementation project(':common-test-lib')
+
+    testImplementation "org.testcontainers:testcontainers:2.0.2"
 }
 
 bootJar {

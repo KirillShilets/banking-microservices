@@ -18,7 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -37,7 +36,7 @@ class BillServiceUnitTest {
     private static final BigDecimal DEPOSIT_20 = new BigDecimal("20.00");
     private static final BigDecimal MIN_DEPOSIT_LIMIT = new BigDecimal("10.00");
     private static final BigDecimal WRONG_DEPOSIT = new BigDecimal("1.00");
-
+    private static final OffsetDateTime DEFAULT_TIME = OffsetDateTime.parse("2025-12-12T12:00:00Z");
     private static final String ACCOUNT_NAME = "name";
     private static final String EMAIL = "test@test.com";
     private static final String PHONE = "+375444243564";
@@ -51,12 +50,16 @@ class BillServiceUnitTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
-    @InjectMocks
     private BillServiceImpl billService;
 
     @BeforeEach
     void init() {
-        ReflectionTestUtils.setField(billService, "minDepositAmount", MIN_DEPOSIT_LIMIT);
+        billService = new BillServiceImpl(
+                billRepository,
+                accountServiceClient,
+                eventPublisher,
+                MIN_DEPOSIT_LIMIT
+        );
     }
 
     @Test
@@ -86,7 +89,7 @@ class BillServiceUnitTest {
     @DisplayName("Should create a new bill successfully")
     void createBill_success() {
         when(accountServiceClient.getAccount(ACCOUNT_ID))
-                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, OffsetDateTime.now()));
+                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
 
         Bill saved = new Bill(ACCOUNT_ID, AMOUNT_100, false);
         saved.setBillId(100L);
@@ -107,7 +110,7 @@ class BillServiceUnitTest {
         bill.setBillId(BILL_ID);
 
         when(accountServiceClient.getAccount(ACCOUNT_ID))
-                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, OffsetDateTime.now()));
+                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
         when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
         when(billRepository.save(any(Bill.class))).thenReturn(bill);
 
@@ -126,7 +129,7 @@ class BillServiceUnitTest {
 
         when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
         when(accountServiceClient.getAccount(ACCOUNT_ID))
-                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, OffsetDateTime.now()));
+                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
         when(billRepository.save(any(Bill.class))).thenReturn(bill);
 
         BillDepositResponseDTO response = billService.depositBill(BILL_ID, DEPOSIT_20, EMAIL);
@@ -157,7 +160,7 @@ class BillServiceUnitTest {
 
         when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
         when(accountServiceClient.getAccount(ACCOUNT_ID))
-                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, OffsetDateTime.now()));
+                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
 
         assertThrows(
                 BadRequestException.class,
@@ -168,7 +171,7 @@ class BillServiceUnitTest {
     @Test
     @DisplayName("Should delete bill when it exists")
     void deleteBill_success() {
-        when(billRepository.existsBillByBillId(5L)).thenReturn(true);
+        when(billRepository.existsById(5L)).thenReturn(true);
         billService.deleteBill(5L);
         verify(billRepository).deleteById(5L);
     }
@@ -176,7 +179,7 @@ class BillServiceUnitTest {
     @Test
     @DisplayName("Should throw NotFoundException when attempting to delete non-existent bill")
     void deleteBill_notFound() {
-        when(billRepository.existsBillByBillId(5L)).thenReturn(false);
+        when(billRepository.existsById(5L)).thenReturn(false);
         assertThrows(NotFoundException.class, () -> billService.deleteBill(5L));
     }
 }

@@ -26,8 +26,8 @@ services:
       - "${CONFIG_SERVICE_PORT:-8001}:8001"
     environment:
       SPRING_PROFILES_ACTIVE: native
-      SPRING_SECURITY_USER_NAME: ${SPRING_SECURITY_USER}
-      SPRING_SECURITY_USER_PASSWORD: ${SPRING_SECURITY_PASSWORD}
+      SPRING_SECURITY_USER: ${SPRING_SECURITY_USER}
+      SPRING_SECURITY_PASSWORD: ${SPRING_SECURITY_PASSWORD}
     volumes:
       - ./config-service/src/main/resources/services:/app/config
     healthcheck:
@@ -50,8 +50,8 @@ services:
     ports:
       - "${DISCOVERY_SERVICE_PORT:-8761}:8761"
     environment:
-      SPRING_CONFIG_IMPORT: configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001
-      SPRING_CLOUD_CONFIG_FAIL_FAST: "true"
+      SPRING_SECURITY_USER: ${SPRING_SECURITY_USER}
+      SPRING_SECURITY_PASSWORD: ${SPRING_SECURITY_PASSWORD}
     networks:
       - bank-net
     healthcheck:
@@ -77,11 +77,12 @@ services:
       - "${BILL_SERVICE_PORT}:8082"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CONFIG_IMPORT: configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bill_service_database
       SPRING_DATASOURCE_USERNAME: ${BILL_DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${BILL_DB_PASSWORD}
       DEPOSIT_MIN_AMOUNT: ${DEPOSIT_MIN_AMOUNT}
+      SPRING_SECURITY_USER: ${SPRING_SECURITY_USER}
+      SPRING_SECURITY_PASSWORD: ${SPRING_SECURITY_PASSWORD}
     networks:
       - bank-net
     healthcheck:
@@ -109,10 +110,11 @@ services:
       - "${ACCOUNT_SERVICE_PORT}:8081"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CONFIG_IMPORT: configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/account_service_database
       SPRING_DATASOURCE_USERNAME: ${ACCOUNT_DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${ACCOUNT_DB_PASSWORD}
+      SPRING_SECURITY_USER: ${SPRING_SECURITY_USER}
+      SPRING_SECURITY_PASSWORD: ${SPRING_SECURITY_PASSWORD}
     networks:
       - bank-net
     healthcheck:
@@ -142,10 +144,11 @@ services:
       - "${DEPOSIT_SERVICE_PORT}:8080"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CONFIG_IMPORT: configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/deposit_service_database
       SPRING_DATASOURCE_USERNAME: ${DEPOSIT_DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DEPOSIT_DB_PASSWORD}
+      SPRING_SECURITY_USER: ${SPRING_SECURITY_USER}
+      SPRING_SECURITY_PASSWORD: ${SPRING_SECURITY_PASSWORD}
     networks:
       - bank-net
     healthcheck:
@@ -167,11 +170,12 @@ services:
         condition: service_healthy
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CONFIG_IMPORT: configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001
       MAIL_HOST: ${MAIL_HOST}
       MAIL_PORT: ${MAIL_PORT}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
+      SPRING_SECURITY_USER: ${SPRING_SECURITY_USER}
+      SPRING_SECURITY_PASSWORD: ${SPRING_SECURITY_PASSWORD}
     networks:
       - bank-net
     healthcheck:
@@ -201,7 +205,8 @@ services:
       - "${GATEWAY_SERVICE_PORT}:8989"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
-      SPRING_CONFIG_IMPORT: configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001
+      SPRING_SECURITY_USER: ${SPRING_SECURITY_USER}
+      SPRING_SECURITY_PASSWORD: ${SPRING_SECURITY_PASSWORD}
     networks:
       - bank-net
     healthcheck:

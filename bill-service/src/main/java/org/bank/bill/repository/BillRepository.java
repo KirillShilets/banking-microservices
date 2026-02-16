@@ -9,5 +9,4 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
     List<Bill> getBillsByAccountId(Long accountId);
     void deleteBillsByAccountId(Long accountId);
     boolean existsBillByAccountId(Long accountId);
-    boolean existsBillByBillId(Long id);
 }
