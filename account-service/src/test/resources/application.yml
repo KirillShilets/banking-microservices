@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: account-service
+  cloud:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false

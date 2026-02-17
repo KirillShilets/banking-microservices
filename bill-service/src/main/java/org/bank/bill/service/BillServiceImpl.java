@@ -1,6 +1,5 @@
 package org.bank.bill.service;
 
-import lombok.RequiredArgsConstructor;
 import org.bank.bill.handler.event.DepositEvent;
 import org.bank.bill.handler.event.NotificationEvent;
 import org.bank.client.AccountServiceClient;
@@ -22,15 +21,23 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class BillServiceImpl implements BillService {
 
     private final BillRepository billRepository;
     private final AccountServiceClient accountServiceClient;
     private final ApplicationEventPublisher eventPublisher;
 
-    @Value("${app.deposit.min-amount:2.60}")
-    private BigDecimal minDepositAmount;
+    private final BigDecimal minDepositAmount;
+
+    public BillServiceImpl(BillRepository billRepository,
+                           AccountServiceClient accountServiceClient,
+                           ApplicationEventPublisher eventPublisher,
+                           @Value("${app.deposit.min-amount:2.60}") BigDecimal minDepositAmount) {
+        this.billRepository = billRepository;
+        this.accountServiceClient = accountServiceClient;
+        this.eventPublisher = eventPublisher;
+        this.minDepositAmount = minDepositAmount;
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -115,7 +122,7 @@ public class BillServiceImpl implements BillService {
     @Override
     @Transactional
     public void deleteBill(Long billId) {
-        if(!billRepository.existsBillByBillId(billId)) {
+        if(!billRepository.existsById(billId)) {
             throw new NotFoundException("Unable to find bill with id: " + billId);
         }
         billRepository.deleteById(billId);

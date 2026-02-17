@@ -4,11 +4,11 @@ spring:
       server:
         native:
           search-locations: classpath:/services/, file:./config/
-      enabled: false
   profiles:
     active: native
   security:
     user:
+      name: ${SPRING_SECURITY_USER}
       password: ${SPRING_SECURITY_PASSWORD}
 
 management:
