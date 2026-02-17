@@ -38,8 +38,9 @@ dependencies {
     implementation 'org.liquibase:liquibase-core'
     implementation "org.postgresql:postgresql:42.7.3"
 
-    testImplementation "org.springframework.boot:spring-boot-starter-test"
-    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+    testImplementation project(':common-test-lib')
+
+    testImplementation "org.testcontainers:testcontainers:2.0.2"
 }
 
 bootJar {
@@ -54,4 +55,3 @@ jar {
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
-
