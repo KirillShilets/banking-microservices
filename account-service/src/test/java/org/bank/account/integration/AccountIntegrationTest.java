@@ -2,8 +2,8 @@ package org.bank.account.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bank.account.entity.Account;
+import org.bank.account.messaging.BillCommandGateway;
 import org.bank.account.repository.AccountRepository;
-import org.bank.client.BillServiceClient;
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.account.controller.dto.AccountRequestDTO;
 import org.bank.account.controller.dto.UpdateAccountRequestDTO;
@@ -54,7 +54,7 @@ class AccountIntegrationTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private BillServiceClient billServiceClient;
+    private BillCommandGateway billCommandGateway;
 
     @AfterEach
     void clear() {
@@ -81,7 +81,7 @@ class AccountIntegrationTest {
         assertThat(account.getEmail()).isEqualTo(EMAIL);
         assertThat(account.getName()).isEqualTo(NAME);
 
-        verify(billServiceClient, timeout(2000)).createBillsForAccount(eq(accountId), anyList());
+        verify(billCommandGateway, timeout(2000)).createBillsForAccount(eq(accountId), anyList());
     }
 
     @Test
@@ -121,7 +121,7 @@ class AccountIntegrationTest {
 
         assertThat(accountRepository.findById(saved.getAccountId())).isEmpty();
 
-        verify(billServiceClient, timeout(2000)).deleteBillsByAccountId(eq(saved.getAccountId()));
+        verify(billCommandGateway, timeout(2000)).deleteBillsByAccountId(eq(saved.getAccountId()));
     }
 
     @Test

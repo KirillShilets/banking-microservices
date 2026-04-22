@@ -2,10 +2,10 @@ package org.bank.bill.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bank.bill.entity.Bill;
+import org.bank.bill.messaging.AccountQueryGateway;
+import org.bank.bill.messaging.DepositCommandGateway;
+import org.bank.bill.messaging.NotificationCommandGateway;
 import org.bank.bill.repository.BillRepository;
-import org.bank.client.AccountServiceClient;
-import org.bank.client.DepositServiceClient;
-import org.bank.client.NotificationServiceClient;
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.dto.request.BillRequestDTO;
 import org.bank.dto.request.DepositRequestDTO;
@@ -63,17 +63,17 @@ class BillIntegrationTest {
     private ObjectMapper objectMapper;
 
     @MockitoBean
-    private AccountServiceClient accountServiceClient;
+    private AccountQueryGateway accountQueryGateway;
 
     @MockitoBean
-    private NotificationServiceClient notificationServiceClient;
+    private NotificationCommandGateway notificationCommandGateway;
 
     @MockitoBean
-    private DepositServiceClient depositServiceClient;
+    private DepositCommandGateway depositCommandGateway;
 
     @BeforeEach
     void setup() {
-        when(accountServiceClient.getAccount(anyLong()))
+        when(accountQueryGateway.getAccount(anyLong()))
                 .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
     }
 
@@ -144,8 +144,8 @@ class BillIntegrationTest {
         Bill updated = billRepository.findById(bill.getBillId()).orElseThrow();
         assertThat(updated.getAmount()).isEqualByComparingTo("110.00");
 
-        verify(notificationServiceClient, timeout(2000)).sendDepositNotification(any());
-        verify(depositServiceClient, timeout(2000)).saveDeposit(any());
+        verify(notificationCommandGateway, timeout(2000)).sendDepositNotification(any());
+        verify(depositCommandGateway, timeout(2000)).saveDeposit(any());
     }
 
     @Test
@@ -189,8 +189,8 @@ class BillIntegrationTest {
         Bill notUpdated = billRepository.findById(bill.getBillId()).orElseThrow();
         assertThat(notUpdated.getAmount()).isEqualByComparingTo(AMOUNT_100);
 
-        verify(notificationServiceClient, never()).sendDepositNotification(any());
-        verify(depositServiceClient, never()).saveDeposit(any());
+        verify(notificationCommandGateway, never()).sendDepositNotification(any());
+        verify(depositCommandGateway, never()).saveDeposit(any());
     }
 
     @Test
@@ -208,8 +208,8 @@ class BillIntegrationTest {
         Bill notUpdated = billRepository.findById(bill.getBillId()).orElseThrow();
         assertThat(notUpdated.getAmount()).isEqualByComparingTo(AMOUNT_100);
 
-        verify(notificationServiceClient, never()).sendDepositNotification(any());
-        verify(depositServiceClient, never()).saveDeposit(any());
+        verify(notificationCommandGateway, never()).sendDepositNotification(any());
+        verify(depositCommandGateway, never()).saveDeposit(any());
     }
 
     @Test

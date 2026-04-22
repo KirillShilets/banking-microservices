@@ -8,6 +8,13 @@ spring:
       enabled: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
+  rabbitmq:
+    dynamic: false
+    listener:
+      simple:
+        auto-startup: false
+      direct:
+        auto-startup: false
 
 eureka:
   client:
