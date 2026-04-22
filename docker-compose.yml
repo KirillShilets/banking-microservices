@@ -27,6 +27,24 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-bankmq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-bankmqpass}
+    ports:
+      - "${RABBITMQ_EXTERNAL_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    networks:
+      - bank-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   config-service:
     build:
       context: ./config-service
@@ -82,6 +100,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "${BILL_SERVICE_PORT}:8082"
     environment:
@@ -114,6 +134,8 @@ services:
       postgres:
         condition: service_healthy
       bill-service:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     ports:
       - "${ACCOUNT_SERVICE_PORT}:8081"
@@ -149,6 +171,8 @@ services:
         condition: service_healthy
       account-service:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "${DEPOSIT_SERVICE_PORT}:8080"
     environment:
@@ -176,6 +200,8 @@ services:
       config-service:
         condition: service_healthy
       discovery-service:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka

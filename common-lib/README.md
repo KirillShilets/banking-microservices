@@ -2,11 +2,11 @@
 
 `common-lib` — общая библиотека для микросервисов банка, обеспечивающая:
 
-* Конфигурацию Feign клиентов с кастомным ErrorDecoder
+* RabbitMQ topology/config для межсервисного взаимодействия
 * DTO для запросов и ответов
 * Обработку исключений и глобальный Exception Handler
 * Валидацию входных данных
-* Поддержку retry для внешних сервисов через Spring Retry и Feign
+* Общие messaging DTO для RabbitMQ команд и RPC
 
 Библиотека используется всеми клиентами микросервисов (`deposit-service`, `bill-service`, `account-service`, `notification-service`).
 
@@ -17,15 +17,14 @@
 ```
 common-lib/
 │
-├── src/main/java/org/bank/client/
-│   ├── FeignConfig.java               
-│   ├── AccountServiceClient.java
-│   ├── BillServiceClient.java
-│   ├── DepositServiceClient.java
-│   └── NotificationServiceClient.java
-│
-├── src/main/java/org/bank/client/exception/
-│   └── FeignErrorDecoder.java 
+├── src/main/java/org/bank/messaging/
+│   ├── RabbitTopology.java
+│   ├── config/RabbitMessagingConfiguration.java
+│   └── dto/
+│       ├── AccountLookupRequestDTO.java
+│       ├── AccountLookupResponseDTO.java
+│       ├── CreateBillsCommandDTO.java
+│       └── DeleteBillsByAccountCommandDTO.java
 │
 ├── src/main/java/org/bank/dto/
 │   ├── request/
@@ -61,12 +60,13 @@ common-lib/
 
 ---
 
-## ⚙️ Feign и Retry
+## ⚙️ RabbitMQ и Messaging
 
 `common-lib` предоставляет:
 
-* `FeignConfig` с кастомным `FeignErrorDecoder`, который преобразует HTTP ошибки в `ServiceException`
-* Автоматическую повторную отправку запросов при ошибках типа `ServiceUnavailable` для сервисов `bill-service`, `deposit-service` и `notification-service`
+* `RabbitTopology` с единым именованием exchange/queues/routing keys
+* `RabbitMessagingConfiguration` (durable queues, bindings, JSON converter, `RabbitTemplate`)
+* DTO для RabbitMQ commands и RPC (`account.query`, `bill.account.created`, `bill.account.deleted`, `deposit.save`, `notification.deposit`)
 * Валидацию входных DTO через Jakarta Validation
 
 ---
@@ -111,9 +111,9 @@ common-lib/
 
 * Полная совместимость с Spring Boot 3.5.6 и Spring Cloud 2025.0.0
 * DTO строго типизированы и поддерживают валидацию
-* Feign клиенты легко интегрируются в любой сервис
-* Ошибки внешних сервисов преобразуются в удобные для обработки исключения
-* Поддержка retry для нестабильных сервисов через Spring Retry
+* RabbitMQ topology и messaging DTO легко интегрируются в любой сервис
+* Ошибки доменной логики унифицированы через `ServiceException`
+* Поддержка RPC timeout для RabbitMQ-запросов
 * Логирование всех ошибок через SLF4J
 
 ---
@@ -123,7 +123,7 @@ common-lib/
 Используется JUnit 5:
 
 * Проверка корректной сериализации/десериализации DTO
-* Проверка работы `FeignErrorDecoder`
+* Проверка корректности обработки `ServiceException` в `GlobalExceptionHandler`
 * Проверка `GlobalExceptionHandler` на основные типы ошибок
 
 Запуск:

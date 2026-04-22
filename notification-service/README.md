@@ -1,7 +1,7 @@
 # Notification Service
 
 **Notification Service** — микросервис, отвечающий за отправку email-уведомлений клиентам банка.
-На данный момент поддерживает отправку уведомлений о пополнении счёта (Deposit Notification) и интегрируется с другими сервисами через REST.
+На данный момент поддерживает отправку уведомлений о пополнении счёта (Deposit Notification) и интегрируется с другими сервисами через RabbitMQ (основной путь) и REST (дополнительный путь).
 
 ---
 
@@ -14,6 +14,7 @@
 * Логирует весь процесс отправки
 * Бросает доменное исключение `NotificationSendException` при сбоях SMTP
 * Поддерживает валидацию входящих DTO
+* Принимает асинхронные команды уведомления через RabbitMQ (`notification.deposit`)
 
 ---
 
@@ -42,6 +43,7 @@
 * **Integration**
 
     * Spring Boot Mail
+    * RabbitMQ (`NotificationCommandListener`, очередь `bank.notification.deposit.queue`)
     * Spring Cloud Config
     * Eureka Discovery Client
 
@@ -94,6 +96,17 @@ POST /notifications/deposits
 
 ---
 
+## 🐇 RabbitMQ
+
+Основной межсервисный поток:
+
+1. `bill-service` публикует сообщение с routing key `notification.deposit`.
+2. Сообщение приходит в очередь `bank.notification.deposit.queue`.
+3. `NotificationCommandListener` вызывает `NotificationService`.
+4. Сервис отправляет письмо через `JavaMailSender`.
+
+---
+
 ## 📬 Email сообщение
 
 Тело письма формируется как:
@@ -123,6 +136,9 @@ spring:
     name: notification-service
   config:
     import: "configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001"
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
 ```
 
 Для отправки писем нужно добавить в Config Service:

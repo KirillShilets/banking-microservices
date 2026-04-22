@@ -1,7 +1,7 @@
 # Bill Service
 
 **Bill Service** — микросервис, отвечающий за управление банковскими счетами (bills).
-Он предоставляет REST-API для CRUD-операций над счетами, выполняет операции депозита, публикует доменные события и интегрируется с `account-service`, `deposit-service` и `notification-service` через Feign-клиентов и Spring Events.
+Он предоставляет REST-API для CRUD-операций над счетами, выполняет операции депозита, публикует доменные события и интегрируется с `account-service`, `deposit-service` и `notification-service` через RabbitMQ и Spring Events.
 
 ---
 
@@ -36,12 +36,11 @@
     * `DepositEvent` → отправка в Deposit Service
     * `NotificationEvent` → отправка в Notification Service
 * **Integration**:
-
-    * Feign-клиенты:
-
-        * `AccountServiceClient`
-        * `DepositServiceClient`
-        * `NotificationServiceClient`
+    * RabbitMQ gateways/listeners:
+        * `AccountQueryGateway` (RPC)
+        * `DepositCommandGateway`
+        * `NotificationCommandGateway`
+        * `BillAccountCommandListener`
     * Spring Events
     * Async
     * Spring Retry
@@ -55,7 +54,7 @@
 
 * Spring Cloud Config
 * PostgreSQL
-* Feign clients
+* RabbitMQ (AMQP)
 * Spring Events + @Async + @TransactionalEventListener
 * Retry-логика для внешних вызовов
 * Liquibase
@@ -201,7 +200,7 @@ Request:
 На уровне сервиса выполняется:
 
 * валидация минимальной суммы (`app.deposit.min-amount`)
-* проверка email через Account Service
+* проверка email через Account Service (RabbitMQ RPC)
 * обновление баланса
 * публикация двух событий:
 
@@ -233,7 +232,7 @@ new DepositEvent(billId, amount, email)
 ```
 
 Обрабатывается асинхронно
-→ вызывает `DepositServiceClient.createDeposit(...)`.
+→ отправляет команду в RabbitMQ (`deposit.save`).
 
 ---
 
@@ -245,7 +244,7 @@ new DepositEvent(billId, amount, email)
 new NotificationEvent(email, amount, billId)
 ```
 
-Обрабатывается → вызывает `NotificationServiceClient.sendNotification()`.
+Обрабатывается → отправляет команду в RabbitMQ (`notification.deposit`).
 
 ---
 
@@ -263,11 +262,11 @@ new NotificationEvent(email, amount, billId)
 * Подключение реальной БД PostgreSQL
 * Liquibase миграции
 * Проверка CRUD операций
-* Mock Feign-клиентов:
+* Mock RabbitMQ gateways:
 
-    * `AccountServiceClient`
-    * `DepositServiceClient`
-    * `NotificationServiceClient`
+    * `AccountQueryGateway`
+    * `DepositCommandGateway`
+    * `NotificationCommandGateway`
 * Проверка обработки событий
 
 ---
@@ -322,16 +321,19 @@ java -jar bill-service.jar
 
 * проверки существования аккаунта
 * валидации email при депозите
+* взаимодействие реализовано через RabbitMQ RPC (`account.query`)
 
 ### Deposit Service
 
 Создание записи о депозите после изменения баланса.
+Команда отправляется через RabbitMQ (`deposit.save`).
 
 ### Notification Service
 
 Отправка email-уведомления пользователю.
+Команда отправляется через RabbitMQ (`notification.deposit`).
 
-Все вызовы — **с retry-логикой**.
+Обработка сообщений выполняется асинхронно, retry регулируется Rabbit listener конфигурацией.
 
 ---
 
@@ -358,7 +360,8 @@ java -jar bill-service.jar
 
 * Java 17
 * Spring Boot 3.5.6
-* Spring Cloud (Feign, Config)
+* Spring Cloud (Config)
+* RabbitMQ (AMQP)
 * PostgreSQL
 * Liquibase
 * JPA / Hibernate

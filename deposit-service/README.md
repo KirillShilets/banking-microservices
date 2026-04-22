@@ -1,7 +1,7 @@
 # Deposit Service
 
 **Deposit Service** — микросервис для управления депозитами клиентов.
-Сервис обрабатывает создание депозитов, получение информации о них, хранение данных в PostgreSQL, использует Liquibase для миграций и регистрируется в Eureka для сервис-дискавери.
+Сервис обрабатывает создание депозитов, получение информации о них, хранение данных в PostgreSQL, использует Liquibase для миграций, регистрируется в Eureka и принимает межсервисные команды через RabbitMQ.
 
 ---
 
@@ -14,6 +14,7 @@
 * Хранение данных в PostgreSQL
 * Liquibase миграции базы данных
 * Интеграция с Eureka Discovery Service
+* Приём команд сохранения депозита через RabbitMQ (`deposit.save`)
 * Unit и интеграционные тесты
 
 ---
@@ -27,6 +28,7 @@
 * **Repository** — доступ к данным через Spring Data JPA (`DepositRepository`)
 * **Entity** — JPA-модель таблицы `deposits`
 * **Exception Handling** — централизованная обработка ошибок
+* **Messaging** — `DepositCommandListener` для очереди `bank.deposit.save.queue`
 * **Integration** — Eureka для регистрации и discovery сервисов
 * **Liquibase** — миграции базы данных
 
@@ -49,6 +51,9 @@ spring:
   liquibase:
     enabled: true
     change-log: classpath:db/changelog/db.changelog-master.xml
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
 
 eureka:
   client:
@@ -94,6 +99,16 @@ GET /deposits/{id}
 ```
 GET /deposits/customer/{customerId}
 ```
+
+---
+
+## 🐇 RabbitMQ
+
+Межсервисный путь записи депозита:
+
+1. `bill-service` публикует сообщение с routing key `deposit.save`.
+2. Сообщение попадает в очередь `bank.deposit.save.queue`.
+3. `DepositCommandListener` принимает DTO и сохраняет депозит.
 
 ---
 

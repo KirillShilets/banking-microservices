@@ -1,7 +1,7 @@
 # Account Service
 
 **Account Service** — это микросервис, отвечающий за управление учётными записями пользователей в банковской системе.  
-Он предоставляет REST-API для CRUD-операций над аккаунтами, публикует доменные события, взаимодействует с `bill-service` через Feign-клиента и использует Liquibase для миграций.
+Он предоставляет REST-API для CRUD-операций над аккаунтами, публикует доменные события, взаимодействует с `bill-service` через RabbitMQ и использует Liquibase для миграций.
 
 ---
 
@@ -26,10 +26,11 @@
 - **Repository** — работа с БД через Spring Data JPA
 - **Entity** — модель таблицы accounts
 - **Event Handler** — обрабатывает доменные события:
-    - `AccountCreatedEvent` → создаёт счета через `BillServiceClient`
+    - `AccountCreatedEvent` → создаёт счета через RabbitMQ command
     - `AccountDeletedEvent` → удаляет счета по accountId
 - **Integration**:
-    - Feign Client (`BillServiceClient`)
+    - RabbitMQ (AMQP)
+    - `BillCommandGateway`
     - Spring Cloud Discovery
     - Spring Retry
     - Liquibase миграции
@@ -42,7 +43,7 @@
 - Spring Cloud Config
 - PostgreSQL
 - Liquibase
-- Feign clients
+- RabbitMQ listeners/publishers
 - Eureka Discovery Client
 - Async + Retry
 
@@ -127,7 +128,7 @@ POST /accounts
 ```
 
 📌 **Плюс:**  
-Сразу после коммита публикуется `AccountCreatedEvent`, который вызывает создание счетов через `bill-service`.
+Сразу после коммита публикуется `AccountCreatedEvent`, который отправляет команду создания счетов в `bill-service` через RabbitMQ.
 
 ---
 
@@ -168,14 +169,14 @@ new AccountCreatedEvent(accountId, bills)
 Хендлер вызывает:
 
 ```java
-billServiceClient.createBillsForAccount(accountId, bills)
+billCommandGateway.createBillsForAccount(accountId, bills)
 ```
 
 ### AccountDeletedEvent
 Отправляется после удаления.
 
 ```java
-billServiceClient.deleteBillsByAccountId(accountId)
+billCommandGateway.deleteBillsByAccountId(accountId)
 ```
 
 ---
@@ -192,10 +193,10 @@ billServiceClient.deleteBillsByAccountId(accountId)
 ### ✔ Интеграционные тесты:
 - поднятие контекста Spring Boot
 - реальный PostgreSQL через testcontainers (EnablePostgresTestConfiguration)
-- mock для BillServiceClient
+- mock для BillCommandGateway
 - проверка:
     - сохранения в БД
-    - вызова Feign-клиента
+    - отправки RabbitMQ-команд
     - обработки событий
     - Liquibase миграций
 
@@ -245,12 +246,12 @@ java -jar account-service.jar
 ## 📡 Взаимодействие с другими сервисами
 
 ### bill-service
-Через Feign-клиент:
+Через RabbitMQ команды:
 
-- `POST /bills/account/{accountId}`
-- `DELETE /bills/account/{accountId}`
+- `bill.account.created`
+- `bill.account.deleted`
 
-Оба вызова выполняются **асинхронно** и **с retry-логикой**.
+Команды выполняются **асинхронно** и обрабатываются `bill-service` listener-ами.
 
 ---
 
@@ -277,7 +278,8 @@ java -jar account-service.jar
 
 - Java 17
 - Spring Boot 3.5.6
-- Spring Cloud (Eureka, Config, OpenFeign)
+- Spring Cloud (Eureka, Config)
+- RabbitMQ (AMQP)
 - PostgreSQL
 - Liquibase
 - JPA / Hibernate

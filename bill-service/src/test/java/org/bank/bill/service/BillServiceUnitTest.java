@@ -3,8 +3,8 @@ package org.bank.bill.service;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.handler.event.DepositEvent;
 import org.bank.bill.handler.event.NotificationEvent;
+import org.bank.bill.messaging.AccountQueryGateway;
 import org.bank.bill.repository.BillRepository;
-import org.bank.client.AccountServiceClient;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
@@ -45,7 +45,7 @@ class BillServiceUnitTest {
     private BillRepository billRepository;
 
     @Mock
-    private AccountServiceClient accountServiceClient;
+    private AccountQueryGateway accountQueryGateway;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -56,7 +56,7 @@ class BillServiceUnitTest {
     void init() {
         billService = new BillServiceImpl(
                 billRepository,
-                accountServiceClient,
+                accountQueryGateway,
                 eventPublisher,
                 MIN_DEPOSIT_LIMIT
         );
@@ -88,7 +88,7 @@ class BillServiceUnitTest {
     @Test
     @DisplayName("Should create a new bill successfully")
     void createBill_success() {
-        when(accountServiceClient.getAccount(ACCOUNT_ID))
+        when(accountQueryGateway.getAccount(ACCOUNT_ID))
                 .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
 
         Bill saved = new Bill(ACCOUNT_ID, AMOUNT_100, false);
@@ -109,7 +109,7 @@ class BillServiceUnitTest {
         Bill bill = new Bill(ACCOUNT_ID, AMOUNT_100, false);
         bill.setBillId(BILL_ID);
 
-        when(accountServiceClient.getAccount(ACCOUNT_ID))
+        when(accountQueryGateway.getAccount(ACCOUNT_ID))
                 .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
         when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
         when(billRepository.save(any(Bill.class))).thenReturn(bill);
@@ -128,7 +128,7 @@ class BillServiceUnitTest {
         bill.setCreationDate(OffsetDateTime.now());
 
         when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
-        when(accountServiceClient.getAccount(ACCOUNT_ID))
+        when(accountQueryGateway.getAccount(ACCOUNT_ID))
                 .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
         when(billRepository.save(any(Bill.class))).thenReturn(bill);
 
@@ -159,7 +159,7 @@ class BillServiceUnitTest {
         bill.setBillId(BILL_ID);
 
         when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
-        when(accountServiceClient.getAccount(ACCOUNT_ID))
+        when(accountQueryGateway.getAccount(ACCOUNT_ID))
                 .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
 
         assertThrows(

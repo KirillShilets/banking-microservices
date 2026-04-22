@@ -2,7 +2,7 @@ package org.bank.bill.service;
 
 import org.bank.bill.handler.event.DepositEvent;
 import org.bank.bill.handler.event.NotificationEvent;
-import org.bank.client.AccountServiceClient;
+import org.bank.bill.messaging.AccountQueryGateway;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
@@ -24,17 +24,17 @@ import java.util.stream.Collectors;
 public class BillServiceImpl implements BillService {
 
     private final BillRepository billRepository;
-    private final AccountServiceClient accountServiceClient;
+    private final AccountQueryGateway accountQueryGateway;
     private final ApplicationEventPublisher eventPublisher;
 
     private final BigDecimal minDepositAmount;
 
     public BillServiceImpl(BillRepository billRepository,
-                           AccountServiceClient accountServiceClient,
+                           AccountQueryGateway accountQueryGateway,
                            ApplicationEventPublisher eventPublisher,
                            @Value("${app.deposit.min-amount:2.60}") BigDecimal minDepositAmount) {
         this.billRepository = billRepository;
-        this.accountServiceClient = accountServiceClient;
+        this.accountQueryGateway = accountQueryGateway;
         this.eventPublisher = eventPublisher;
         this.minDepositAmount = minDepositAmount;
     }
@@ -56,7 +56,7 @@ public class BillServiceImpl implements BillService {
     @Override
     @Transactional
     public Long createBill(Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
-        accountServiceClient.getAccount(accountId);
+        accountQueryGateway.getAccount(accountId);
         Bill bill = new Bill(accountId, amount, overdraftEnabled);
         if(!billRepository.existsBillByAccountId(accountId)) {
             bill.setIsDefault(true);
@@ -68,7 +68,7 @@ public class BillServiceImpl implements BillService {
     @Override
     @Transactional
     public List<Long> createBillsForAccount(Long accountId, List<CreateBillRequestDTO> bills) {
-        accountServiceClient.getAccount(accountId);
+        accountQueryGateway.getAccount(accountId);
         List<Bill> billsToSave = bills.stream()
                 .map(dto -> new Bill(accountId, dto.amount(), dto.overdraftEnabled()))
                 .collect(Collectors.toList());
@@ -88,7 +88,7 @@ public class BillServiceImpl implements BillService {
     @Override
     @Transactional
     public BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
-        accountServiceClient.getAccount(accountId);
+        accountQueryGateway.getAccount(accountId);
         Bill billToUpdate = getBillById(billId);
         billToUpdate.setAccountId(accountId);
         billToUpdate.setAmount(amount);
@@ -107,7 +107,7 @@ public class BillServiceImpl implements BillService {
         Bill bill = getBillById(billId);
         bill.setAmount(bill.getAmount().add(amount));
 
-        AccountResponseDTO account = accountServiceClient.getAccount(bill.getAccountId());
+        AccountResponseDTO account = accountQueryGateway.getAccount(bill.getAccountId());
         if(!account.email().equalsIgnoreCase(email)) {
             throw new BadRequestException("Provided email: " + email + " does not belong to account owner");
         }

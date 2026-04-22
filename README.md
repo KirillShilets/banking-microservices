@@ -19,7 +19,7 @@ Spring Cloud Banking System — учебный проект распределе
 * Spring Cloud Netflix Eureka — Service Discovery
 * Spring Cloud Config — Централизованное управление конфигурацией
 * Spring Cloud Gateway — API Gateway (Reactive/WebFlux)
-* Spring Cloud OpenFeign — Декларативный REST-клиент
+* RabbitMQ (AMQP) — межсервисное взаимодействие (commands + RPC)
 
 **Data & Persistence**
 
@@ -57,7 +57,7 @@ Spring Cloud Banking System — учебный проект распределе
 
 ### Общие библиотеки
 
-* `common-lib` — DTO, Exception Handlers, Feign конфигурации
+* `common-lib` — DTO, Exception Handlers, RabbitMQ topology/config
 * `common-test-lib` — Конфигурации для Testcontainers
 
 ---
@@ -142,7 +142,7 @@ Docker Compose автоматически поднимет базу данных
 * **Security**: JWT авторизация, OAuth2 Resource Server
 * **Caching**: Redis для кеширования
 * **Orchestration**: Kubernetes (K8s) + Helm Charts
-* **Messaging**: Kafka/RabbitMQ вместо синхронного Feign
+* **Messaging**: DLQ / Outbox / idempotency для RabbitMQ-сценариев
 * **Observability**: ELK Stack или Prometheus + Grafana
 * **Saga Pattern**: Распределенные транзакции
 

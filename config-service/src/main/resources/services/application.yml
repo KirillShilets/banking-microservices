@@ -12,6 +12,20 @@ spring:
     time-zone: UTC
     serialization:
       write-dates-as-timestamps: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin123}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1s
+          max-attempts: 3
+          max-interval: 5s
+          multiplier: 2.0
   jpa:
     hibernate:
       ddl-auto: validate
@@ -22,3 +36,9 @@ spring:
         jdbc:
           lob:
             non_contextual_creation: true
+
+app:
+  messaging:
+    rpc:
+      account:
+        timeout-ms: ${ACCOUNT_RPC_TIMEOUT_MS:5000}
