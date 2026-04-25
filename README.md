@@ -124,7 +124,7 @@ MAIL_PASSWORD=app-password
 ### 4. Запуск через Docker Compose
 
 ```bash
-docker-compose up -d --build
+docker-compose up --build
 ```
 
 Docker Compose автоматически поднимет базу данных, инициализирует пользователей и запустит все микросервисы с Healthchecks.
@@ -133,7 +133,8 @@ Docker Compose автоматически поднимет базу данных
 
 * Eureka Dashboard: [http://localhost:8761](http://localhost:8761)
 * API Gateway: [http://localhost:8989](http://localhost:8989)
-* PostgreSQL: localhost:5433
+* PostgreSQL: [http://localhost:5433](http://localhost:5433)
+* Frontend: [http://localhost:3000](http://localhost:3000)
 
 ---
 
