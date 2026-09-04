@@ -31,10 +31,14 @@ public class Account {
     @Column(name = "creation_date", nullable = false)
     private OffsetDateTime creationDate;
 
-    public Account(String name, String email, String phone, OffsetDateTime creationDate) {
+    @Column(name = "owner_subject", nullable = false, unique = true, length = 36)
+    private String ownerSubject;
+
+    public Account(String name, String email, String phone, String ownerSubject, OffsetDateTime creationDate) {
         this.name = name;
         this.email = email;
         this.phone = phone;
+        this.ownerSubject = ownerSubject;
         this.creationDate = creationDate;
     }
 }

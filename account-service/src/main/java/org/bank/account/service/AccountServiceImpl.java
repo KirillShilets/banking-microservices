@@ -10,6 +10,7 @@ import org.bank.exception.AlreadyExistsException;
 import org.bank.exception.NotFoundException;
 import org.bank.account.entity.Account;
 import org.bank.account.repository.AccountRepository;
+import org.bank.security.web.AuthenticatedUser;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -24,12 +25,14 @@ public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuthenticatedUser authenticatedUser;
 
     @Override
     @Transactional(readOnly = true)
     public AccountResponseDTO getAccount(Long accountId) {
         Account account = getAccountById(accountId);
         return new AccountResponseDTO(
+                account.getOwnerSubject(),
                 account.getName(),
                 account.getEmail(),
                 account.getPhone(),
@@ -38,9 +41,17 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    public AccountResponseDTO getCurrentAccount() {
+        String subject = authenticatedUser.subject();
+        Account account = accountRepository.findByOwnerSubject(subject)
+                .orElseThrow(() -> new NotFoundException("Account not found for current user"));
+        return toResponse(account);
+    }
+
+    @Override
     @Transactional
     public Long createAccount(String name, String email, String phone, List<CreateBillRequestDTO> bills) {
-        Account account = new Account(name, email, phone, OffsetDateTime.now());
+        Account account = new Account(authenticatedUser.subject(), name, email, phone, OffsetDateTime.now());
         try {
             Account savedAccount = accountRepository.save(account);
             Long accountId = savedAccount.getAccountId();
@@ -73,5 +84,15 @@ public class AccountServiceImpl implements AccountService {
     private Account getAccountById(Long accountId) {
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new NotFoundException("Unable to find account with id: " + accountId));
+    }
+
+    private AccountResponseDTO toResponse(Account account) {
+        return new AccountResponseDTO(
+                account.getOwnerSubject(),
+                account.getName(),
+                account.getEmail(),
+                account.getPhone(),
+                account.getCreationDate()
+        );
     }
 }

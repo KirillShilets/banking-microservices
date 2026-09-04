@@ -1,0 +1,2 @@
+org.bank.security.config.ServletResourceServerSecurityConfig
+org.bank.security.config.ReactiveResourceServerSecurityConfig

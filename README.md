@@ -1,7 +1,7 @@
 # 🏦 Spring Cloud Banking System
 
-Spring Cloud Banking System — учебный проект распределенной банковской системы на микросервисной архитектуре с использованием Spring Cloud и Docker.
-Проект демонстрирует основные паттерны микросервисов: Service Discovery, Centralized Configuration, API Gateway, Fault Tolerance, асинхронное взаимодействие через события и подготовку к Distributed Tracing.
+Spring Cloud Banking System — учебный проект распределённой банковской системы на микросервисной архитектуре с использованием Spring Cloud и Docker.
+Проект демонстрирует основные паттерны микросервисов: Service Discovery, Centralized Configuration, API Gateway, Fault Tolerance, асинхронное взаимодействие через события, а также аутентификацию и авторизацию через Keycloak (OAuth2 / OIDC).
 
 ---
 
@@ -13,6 +13,12 @@ Spring Cloud Banking System — учебный проект распределе
 * Spring Boot 3.5.6
 * Spring Cloud 2025.0.0
 * Gradle (Multi-module project)
+
+**Security**
+
+* Keycloak 26 — Identity Provider (OIDC, Authorization Code + PKCE)
+* Spring Security OAuth2 Resource Server — проверка JWT на gateway и в каждом сервисе
+* Role-based access (realm roles `admin` / `employee` / `customer`) + проверка владельца ресурса
 
 **Infrastructure & Cloud**
 
@@ -26,6 +32,11 @@ Spring Cloud Banking System — учебный проект распределе
 * PostgreSQL — Реляционная база данных
 * Liquibase — Управление миграциями БД
 * Spring Data JPA — ORM
+
+**Frontend**
+
+* React + TypeScript + Vite
+* keycloak-js — логин/логаут, обновление токена
 
 **Utilities & Testing**
 
@@ -45,6 +56,8 @@ Spring Cloud Banking System — учебный проект распределе
 | Config Service    | 8001 | Сервер конфигураций с Basic Auth.                         |
 | Discovery Service | 8761 | Eureka Server — реестр сервисов.                          |
 | Gateway Service   | 8989 | API Gateway: маршрутизация, фильтрация, обработка ошибок. |
+| Keycloak          | 8080 | Identity Provider, realm `bank-realm`.                    |
+| Frontend          | 3000 | SPA (nginx), ходит в Gateway с Bearer-токеном.            |
 
 ### Бизнес-сервисы
 
@@ -55,12 +68,50 @@ Spring Cloud Banking System — учебный проект распределе
 | Deposit Service      | 8080          | Логика обработки депозитов.                 |
 | Notification Service | 9999          | Отправка email-уведомлений (SMTP).          |
 
+Бизнес-сервисы не публикуют порты наружу — доступ только через Gateway.
+
 ### Общие библиотеки
 
 * `common-lib` — DTO, Exception Handlers, RabbitMQ topology/config
 * `common-test-lib` — Конфигурации для Testcontainers
+* `security-lib` — автоконфигурация Resource Server (servlet + reactive), маппинг ролей Keycloak в `ROLE_*`, `AuthenticatedUser`
 
 ---
+
+## 🔐 Безопасность
+
+**Поток аутентификации**
+
+1. Frontend перенаправляет пользователя на Keycloak (Authorization Code + PKCE, public client `banking-frontend`).
+2. Keycloak возвращает access token (JWT) с `realm_access.roles` и `aud: banking-frontend`.
+3. Frontend отправляет запросы в Gateway с заголовком `Authorization: Bearer <token>`.
+4. Gateway и каждый бизнес-сервис проверяют подпись (JWKS), `iss` и `aud`. Без валидного токена — `401`.
+5. Внутри сервисов права проверяются по ролям (`@PreAuthorize`) и по владельцу (`owner_subject` = `sub` из токена).
+
+**Матрица доступа**
+
+| Действие                          | customer                | employee | admin |
+| --------------------------------- |-------------------------| -------- | ----- |
+| Создать аккаунт                   | ✅ (один на юзера)       | ✅  | ✅    |
+| `GET /accounts/me`                | ✅                       | ✅       | ✅    |
+| Просмотр / изменение аккаунта     | только свой             | любой    | любой |
+| Удаление аккаунта                 | ❌                       | ❌       | ✅    |
+| Операции со счетами (bills)       | только своего аккаунта  | любые | любые |
+
+Чужой ресурс для `customer` → `403`, отсутствие токена → `401`.
+
+**Тестовые пользователи** (создаются при импорте realm; пароли временные — при первом входе Keycloak попросит сменить)
+
+| Логин           | Роль     | Пароль      |
+|-----------------| -------- | ----------- |
+| `customer.kira` | customer | `Qpass123`  |
+| `employee.bob`  | employee | `Qpass1234` |
+| `admin.kirill`  | admin    | `Qpass12345`|
+
+Открытые эндпоинты: `/actuator/health`, `/actuator/info`, `OPTIONS *` (CORS preflight).
+
+---
+
 
 ## 🚀 Запуск проекта
 
@@ -136,11 +187,23 @@ Docker Compose автоматически поднимет базу данных
 * PostgreSQL: [http://localhost:5433](http://localhost:5433)
 * Frontend: [http://localhost:3000](http://localhost:3000)
 
+### 6. Добавить hostname Keycloak (необязательно)
+
+Браузер и сервисы должны видеть Keycloak под одним и тем же именем, иначе iss в токене не совпадёт с issuer-uri.
+Добавьте в файл hosts строку:
+
+```text
+127.0.0.1 keycloak.localhost
+```
+
+* Windows: C:\Windows\System32\drivers\etc\hosts (редактор от администратора)
+* Linux / macOS: /etc/hosts
+
 ---
 
 ## 🔮 Планы по развитию (Roadmap)
 
-* **Security**: JWT авторизация, OAuth2 Resource Server
+~~* **Security**: JWT авторизация, OAuth2 Resource Server~~
 * **Caching**: Redis для кеширования
 * **Orchestration**: Kubernetes (K8s) + Helm Charts
 * **Messaging**: DLQ / Outbox / idempotency для RabbitMQ-сценариев
