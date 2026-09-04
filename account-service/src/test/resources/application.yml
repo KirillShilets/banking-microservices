@@ -15,6 +15,11 @@ spring:
         auto-startup: false
       direct:
         auto-startup: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://127.0.0.1:1/dummy
 
 eureka:
   client:

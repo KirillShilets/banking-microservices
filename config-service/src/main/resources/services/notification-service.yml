@@ -20,3 +20,8 @@ spring:
           auth: true
           starttls:
             enable: true
+
+management:
+  endpoint:
+    health:
+      show-details: always

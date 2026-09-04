@@ -8,7 +8,7 @@ spring:
     active: native
   security:
     user:
-      name: ${SPRING_SECURITY_USER}
+      name: ${SPRING_SECURITY_USER_NAME}
       password: ${SPRING_SECURITY_PASSWORD}
 
 management:

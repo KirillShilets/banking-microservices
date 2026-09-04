@@ -3,4 +3,5 @@
 export interface TabProps {
   isBusy: boolean
   executeAction: ExecuteAction
+  isAdmin: boolean
 }

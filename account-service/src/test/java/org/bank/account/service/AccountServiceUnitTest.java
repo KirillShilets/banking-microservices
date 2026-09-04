@@ -9,6 +9,8 @@ import org.bank.dto.request.CreateBillRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.exception.AlreadyExistsException;
 import org.bank.exception.NotFoundException;
+import org.bank.security.BankRoles;
+import org.bank.security.web.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,32 +39,35 @@ class AccountServiceUnitTest {
     private static final String EMAIL = "test@yandex.com";
     private static final String PHONE = "+375444243564";
     private static final OffsetDateTime DEFAULT_TIME = OffsetDateTime.parse("2025-12-12T12:00:00Z");
+    private static final String OWNER_SUB = "11111111-1111-1111-1111-111111111111";
 
     private static final List<CreateBillRequestDTO> EMPTY_BILLS = Collections.emptyList();
 
     @Mock
     private AccountRepository accountRepository;
-
     @Mock
     private ApplicationEventPublisher eventPublisher;
-
+    @Mock
+    private AuthenticatedUser authenticatedUser;
     private AccountServiceImpl accountService;
 
     @BeforeEach
     void init() {
         accountService = new AccountServiceImpl(
                 accountRepository,
-                eventPublisher
+                eventPublisher,
+                authenticatedUser
         );
     }
 
     @Test
     @DisplayName("Should return account details when account is found")
     void getAccount_success() {
-        Account account = new Account(NAME, EMAIL, PHONE, DEFAULT_TIME);
+        Account account = new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME);
         account.setAccountId(ACCOUNT_ID);
 
         when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
+        when(authenticatedUser.hasRole(BankRoles.ADMIN)).thenReturn(true);
 
         AccountResponseDTO dto = accountService.getAccount(ACCOUNT_ID);
         assertEquals(NAME, dto.name());
@@ -82,7 +87,7 @@ class AccountServiceUnitTest {
     @Test
     @DisplayName("Should create a new account successfully and publish event")
     void createAccount_success() {
-        Account savedAccount = new Account(NAME, EMAIL, PHONE, DEFAULT_TIME);
+        Account savedAccount = new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME);
         savedAccount.setAccountId(ACCOUNT_ID);
 
         when(accountRepository.save(any(Account.class))).thenReturn(savedAccount);
@@ -111,13 +116,14 @@ class AccountServiceUnitTest {
     @Test
     @DisplayName("Should update existing account details")
     void updateAccount_success() {
-        Account existingAccount = new Account(NAME, EMAIL, PHONE, DEFAULT_TIME);
+        Account existingAccount = new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME);
         existingAccount.setAccountId(ACCOUNT_ID);
-        Account updatedAccount = new Account(NEW_NAME, EMAIL, PHONE, existingAccount.getCreationDate());
+        Account updatedAccount = new Account(OWNER_SUB, NEW_NAME, EMAIL, PHONE, existingAccount.getCreationDate());
         updatedAccount.setAccountId(ACCOUNT_ID);
 
         when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(existingAccount));
         when(accountRepository.save(any(Account.class))).thenReturn(updatedAccount);
+        when(authenticatedUser.hasRole(BankRoles.ADMIN)).thenReturn(true);
 
         UpdateAccountResponseDTO dto = accountService.updateAccount(ACCOUNT_ID, NEW_NAME, EMAIL, PHONE);
 
@@ -144,7 +150,7 @@ class AccountServiceUnitTest {
     @Test
     @DisplayName("Should delete account and publish event when account exists")
     void deleteAccount_success() {
-        Account account = new Account(NAME, EMAIL, PHONE, DEFAULT_TIME);
+        Account account = new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME);
         account.setAccountId(ACCOUNT_ID);
         when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
 

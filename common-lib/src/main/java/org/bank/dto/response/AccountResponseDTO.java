@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.OffsetDateTime;
 
 public record AccountResponseDTO(
+        String ownerSubject,
         String name,
         String email,
         String phone,

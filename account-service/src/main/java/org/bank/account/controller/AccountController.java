@@ -5,10 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.bank.account.controller.dto.AccountRequestDTO;
 import org.bank.account.controller.dto.UpdateAccountRequestDTO;
 import org.bank.account.controller.dto.UpdateAccountResponseDTO;
-import org.bank.account.entity.Account;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.bank.account.service.AccountService;
 import org.bank.dto.response.AccountResponseDTO;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -23,11 +22,18 @@ public class AccountController {
     private final AccountService accountService;
 
     @GetMapping("/{accountId}")
+    @PreAuthorize("hasAnyRole('customer', 'employee', 'admin')")
     public ResponseEntity<AccountResponseDTO> getAccount(@PathVariable Long accountId) {
         return ResponseEntity.ok(accountService.getAccount(accountId));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<AccountResponseDTO> getCurrentAccount() {
+        return ResponseEntity.ok(accountService.getCurrentAccount());
+    }
+
     @PostMapping
+    @PreAuthorize("hasAnyRole('customer', 'employee', 'admin')")
     public ResponseEntity<Long> createAccount(@Valid @RequestBody AccountRequestDTO dto) {
         Long accountId = accountService.createAccount(dto.name(), dto.email(), dto.phone(), dto.bills());
         URI location = ServletUriComponentsBuilder
@@ -40,12 +46,14 @@ public class AccountController {
 
 
     @PutMapping("/{accountId}")
+    @PreAuthorize("hasAnyRole('customer', 'employee', 'admin')")
     public ResponseEntity<UpdateAccountResponseDTO> updateAccount(@PathVariable Long accountId,
                                                                   @Valid @RequestBody UpdateAccountRequestDTO updateAccountRequestDTO) {
         return ResponseEntity.ok(accountService.updateAccount(accountId, updateAccountRequestDTO.name(), updateAccountRequestDTO.email(), updateAccountRequestDTO.phone()));
     }
 
     @DeleteMapping("/{accountId}")
+    @PreAuthorize("hasRole('admin')")
     public ResponseEntity<Void> deleteAccount(@PathVariable Long accountId) {
         accountService.deleteAccount(accountId);
         return ResponseEntity.noContent().build();

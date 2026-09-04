@@ -3,6 +3,7 @@
   email: string
   phone: string
   creationDate: string
+  ownerSubject: string
 }
 
 export interface UpdateAccountResponseDTO {

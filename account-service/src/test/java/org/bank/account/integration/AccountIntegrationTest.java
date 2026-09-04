@@ -15,12 +15,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -29,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -43,6 +48,7 @@ class AccountIntegrationTest {
     private static final String PHONE = "+375290000000";
     private static final BigDecimal AMOUNT = new BigDecimal("100.00");
     private static final OffsetDateTime DEFAULT_TIME = OffsetDateTime.parse("2025-12-12T12:00:00Z");
+    private static final String OWNER_SUB = "11111111-1111-1111-1111-111111111111";
 
     @Autowired
     private MockMvc mockMvc;
@@ -56,9 +62,19 @@ class AccountIntegrationTest {
     @MockitoBean
     private BillCommandGateway billCommandGateway;
 
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
+
     @AfterEach
     void clear() {
         accountRepository.deleteAll();
+    }
+
+    private RequestPostProcessor adminJwt() {
+        return jwt()
+                .authorities(new SimpleGrantedAuthority("ROLE_admin"))
+                .jwt(j -> j.subject(OWNER_SUB)
+                        .claim("realm_access", Map.of("roles", List.of("admin"))));
     }
 
     @Test
@@ -68,6 +84,7 @@ class AccountIntegrationTest {
         AccountRequestDTO dto = new AccountRequestDTO(NAME, EMAIL, PHONE, bills);
 
         String response = mockMvc.perform(post("/accounts")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isCreated())
@@ -87,9 +104,10 @@ class AccountIntegrationTest {
     @Test
     @DisplayName("Should retrieve existing account from database")
     void getAccount_success() throws Exception {
-        Account saved = accountRepository.save(new Account(NAME, EMAIL, PHONE, DEFAULT_TIME));
+        Account saved = accountRepository.save(new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME));
 
-        mockMvc.perform(get("/accounts/" + saved.getAccountId()))
+        mockMvc.perform(get("/accounts/" + saved.getAccountId())
+                        .with(adminJwt()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(EMAIL))
                 .andExpect(jsonPath("$.name").value(NAME));
@@ -98,10 +116,11 @@ class AccountIntegrationTest {
     @Test
     @DisplayName("Should update account details in database via API")
     void updateAccount_success() throws Exception {
-        Account saved = accountRepository.save(new Account(NAME, EMAIL, PHONE, DEFAULT_TIME));
+        Account saved = accountRepository.save(new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME));
         UpdateAccountRequestDTO dto = new UpdateAccountRequestDTO("update-name", EMAIL, PHONE);
 
         mockMvc.perform(put("/accounts/" + saved.getAccountId())
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
@@ -114,9 +133,10 @@ class AccountIntegrationTest {
     @Test
     @DisplayName("Should delete account from database and trigger bills deletion event")
     void deleteAccount_success() throws Exception {
-        Account saved = accountRepository.save(new Account(NAME, EMAIL, PHONE, DEFAULT_TIME));
+        Account saved = accountRepository.save(new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME));
 
-        mockMvc.perform(delete("/accounts/" + saved.getAccountId()))
+        mockMvc.perform(delete("/accounts/" + saved.getAccountId())
+                        .with(adminJwt())) // <-- Добавлен JWT
                 .andExpect(status().isNoContent());
 
         assertThat(accountRepository.findById(saved.getAccountId())).isEmpty();
@@ -127,7 +147,8 @@ class AccountIntegrationTest {
     @Test
     @DisplayName("Should return 404 when getting non-existent account ID")
     void getAccount_notFound() throws Exception {
-        mockMvc.perform(get("/accounts/" + NON_EXISTENT_ID))
+        mockMvc.perform(get("/accounts/" + NON_EXISTENT_ID)
+                        .with(adminJwt()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message", containsString(String.valueOf(NON_EXISTENT_ID))));
     }
@@ -135,18 +156,20 @@ class AccountIntegrationTest {
     @Test
     @DisplayName("Should return 404 when deleting non-existent account ID")
     void deleteAccount_notFound() throws Exception {
-        mockMvc.perform(delete("/accounts/" + NON_EXISTENT_ID))
+        mockMvc.perform(delete("/accounts/" + NON_EXISTENT_ID)
+                        .with(adminJwt()))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("Should return 409 Conflict (or appropriate error) when email already exists")
     void createAccount_duplicateEmail() throws Exception {
-        accountRepository.save(new Account(NAME, EMAIL, PHONE, DEFAULT_TIME));
+        accountRepository.save(new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME));
 
         AccountRequestDTO dto = new AccountRequestDTO("name2", EMAIL, "+143463424324", List.of(new CreateBillRequestDTO(AMOUNT, true)));
 
         mockMvc.perform(post("/accounts")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isConflict())
@@ -164,6 +187,7 @@ class AccountIntegrationTest {
         """;
 
         mockMvc.perform(post("/accounts")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidJson))
                 .andExpect(status().isBadRequest());

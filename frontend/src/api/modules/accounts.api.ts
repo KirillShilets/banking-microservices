@@ -12,6 +12,8 @@ export const accountsApi = {
   getAccount: (accountId: number) =>
     apiRequest.get<AccountResponseDTO>(`/accounts/${accountId}`),
 
+  getCurrentAccount: () => apiRequest.get<AccountResponseDTO>('/accounts/me'),
+
   createAccount: (payload: AccountRequestDTO) =>
     apiRequest.post<number, AccountRequestDTO>('/accounts', payload),
 

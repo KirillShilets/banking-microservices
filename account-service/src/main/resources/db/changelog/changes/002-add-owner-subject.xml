@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
+
+    <changeSet id="002-add-owner-subject" author="Kirill Shilets">
+        <addColumn tableName="accounts">
+            <column name="owner_subject" type="VARCHAR(36)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+        </addColumn>
+        <createIndex indexName="uk_accounts_owner_subject" tableName="accounts" unique="true">
+            <column name="owner_subject"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

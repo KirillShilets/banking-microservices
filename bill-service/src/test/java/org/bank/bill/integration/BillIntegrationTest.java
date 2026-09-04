@@ -18,11 +18,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;          // <-- новый
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;           // <-- новый
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -33,6 +38,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt; // <-- новый
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -52,6 +58,8 @@ class BillIntegrationTest {
     private static final BigDecimal DEPOSIT_AMOUNT_10 = new BigDecimal("10.00");
     private static final BigDecimal TINY_AMOUNT = new BigDecimal("1.00");
     private static final OffsetDateTime DEFAULT_TIME = OffsetDateTime.parse("2025-12-12T12:00:00Z");
+    private static final String OWNER_SUB = "11111111-1111-1111-1111-111111111111";
+    private static final String OTHER_SUB = "22222222-2222-2222-2222-222222222222";
 
     @Autowired
     private MockMvc mockMvc;
@@ -71,15 +79,32 @@ class BillIntegrationTest {
     @MockitoBean
     private DepositCommandGateway depositCommandGateway;
 
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
+
     @BeforeEach
     void setup() {
         when(accountQueryGateway.getAccount(anyLong()))
-                .thenReturn(new AccountResponseDTO(ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
+                .thenReturn(new AccountResponseDTO(OWNER_SUB, ACCOUNT_NAME, EMAIL, PHONE, DEFAULT_TIME));
     }
 
     @AfterEach
     void clear() {
         billRepository.deleteAll();
+    }
+
+    private RequestPostProcessor adminJwt() {
+        return jwt()
+                .authorities(new SimpleGrantedAuthority("ROLE_admin"))
+                .jwt(j -> j.subject(OWNER_SUB)
+                        .claim("realm_access", Map.of("roles", List.of("admin"))));
+    }
+
+    private RequestPostProcessor customerJwt(String subject) {
+        return jwt()
+                .authorities(new SimpleGrantedAuthority("ROLE_customer"))
+                .jwt(j -> j.subject(subject)
+                        .claim("realm_access", Map.of("roles", List.of("customer"))));
     }
 
     @Test
@@ -88,6 +113,7 @@ class BillIntegrationTest {
         BillRequestDTO dto = new BillRequestDTO(ACCOUNT_ID, AMOUNT_100, true);
 
         String response = mockMvc.perform(post("/bills")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isCreated())
@@ -107,10 +133,40 @@ class BillIntegrationTest {
     void getBill_success() throws Exception {
         Bill saved = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, true));
 
-        mockMvc.perform(get("/bills/" + saved.getBillId()))
+        mockMvc.perform(get("/bills/" + saved.getBillId())
+                        .with(adminJwt()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.billId").value(saved.getBillId()))
                 .andExpect(jsonPath("$.amount").value(100.00));
+    }
+
+    @Test
+    @DisplayName("Should return bill to customer who owns the account")
+    void getBill_customerOwner_success() throws Exception {
+        Bill saved = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, true));
+
+        mockMvc.perform(get("/bills/" + saved.getBillId())
+                        .with(customerJwt(OWNER_SUB)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Should return 403 when customer requests someone else's bill")
+    void getBill_customerForeign_forbidden() throws Exception {
+        Bill saved = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, true));
+
+        mockMvc.perform(get("/bills/" + saved.getBillId())
+                        .with(customerJwt(OTHER_SUB)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Should return 401 without JWT")
+    void getBill_noJwt_unauthorized() throws Exception {
+        Bill saved = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, true));
+
+        mockMvc.perform(get("/bills/" + saved.getBillId()))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -120,6 +176,7 @@ class BillIntegrationTest {
         BillRequestDTO dto = new BillRequestDTO(ACCOUNT_ID, AMOUNT_200, true);
 
         mockMvc.perform(put("/bills/" + bill.getBillId())
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
@@ -136,6 +193,7 @@ class BillIntegrationTest {
         DepositRequestDTO dto = new DepositRequestDTO(bill.getBillId(), DEPOSIT_AMOUNT_10, EMAIL);
 
         mockMvc.perform(post("/bills/deposits")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
@@ -153,7 +211,8 @@ class BillIntegrationTest {
     void deleteBill_success() throws Exception {
         Bill bill = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, true));
 
-        mockMvc.perform(delete("/bills/" + bill.getBillId()))
+        mockMvc.perform(delete("/bills/" + bill.getBillId())
+                        .with(adminJwt()))
                 .andExpect(status().isNoContent());
 
         assertThat(billRepository.findById(bill.getBillId())).isEmpty();
@@ -162,7 +221,8 @@ class BillIntegrationTest {
     @Test
     @DisplayName("Should return 404 when getting non-existent bill ID")
     void getBill_notFound() throws Exception {
-        mockMvc.perform(get("/bills/" + NON_EXISTENT_ID))
+        mockMvc.perform(get("/bills/" + NON_EXISTENT_ID)
+                        .with(adminJwt()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message", containsString(String.valueOf(NON_EXISTENT_ID))));
     }
@@ -170,7 +230,8 @@ class BillIntegrationTest {
     @Test
     @DisplayName("Should return 404 when deleting non-existent bill ID")
     void deleteBill_notFound() throws Exception {
-        mockMvc.perform(delete("/bills/" + NON_EXISTENT_ID))
+        mockMvc.perform(delete("/bills/" + NON_EXISTENT_ID)
+                        .with(adminJwt()))
                 .andExpect(status().isNotFound());
     }
 
@@ -181,6 +242,7 @@ class BillIntegrationTest {
         DepositRequestDTO dto = new DepositRequestDTO(bill.getBillId(), TINY_AMOUNT, EMAIL);
 
         mockMvc.perform(post("/bills/deposits")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isBadRequest())
@@ -200,6 +262,7 @@ class BillIntegrationTest {
         DepositRequestDTO dto = new DepositRequestDTO(bill.getBillId(), DEPOSIT_AMOUNT_10, WRONG_EMAIL);
 
         mockMvc.perform(post("/bills/deposits")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isBadRequest())
@@ -218,6 +281,7 @@ class BillIntegrationTest {
         DepositRequestDTO dto = new DepositRequestDTO(NON_EXISTENT_ID, DEPOSIT_AMOUNT_10, EMAIL);
 
         mockMvc.perform(post("/bills/deposits")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isNotFound());
@@ -234,6 +298,7 @@ class BillIntegrationTest {
         """;
 
         mockMvc.perform(post("/bills")
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidJson))
                 .andExpect(status().isBadRequest());

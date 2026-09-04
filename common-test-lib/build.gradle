@@ -19,6 +19,7 @@ dependencyManagement {
 dependencies {
     api 'org.springframework.boot:spring-boot-starter-test'
     api 'org.springframework.boot:spring-boot-testcontainers'
+    api 'org.springframework.security:spring-security-test'
     api 'org.testcontainers:postgresql'
     api 'org.testcontainers:junit-jupiter'
     api 'org.testcontainers:testcontainers:2.0.2'

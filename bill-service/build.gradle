@@ -25,6 +25,7 @@ dependencyManagement {
 
 dependencies {
     implementation project(':common-lib')
+    implementation project(':security-lib')
 
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-actuator"

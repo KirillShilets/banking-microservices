@@ -2,7 +2,12 @@ spring:
   application:
     name: account-service
   config:
-    import: "configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001"
+    import: "configserver:http://${SPRING_SECURITY_USER_NAME}:${SPRING_SECURITY_PASSWORD}@config-service:8001"
   cloud:
     config:
       fail-fast: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak.localhost:8080/realms/bank-realm

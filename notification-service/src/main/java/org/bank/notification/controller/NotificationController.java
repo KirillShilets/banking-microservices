@@ -6,6 +6,7 @@ import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.NotificationResponseDTO;
 import org.bank.notification.service.NotificationService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,6 +17,7 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     @PostMapping("/deposits")
+    @PreAuthorize("hasAnyRole('customer', 'employee', 'admin')")
     public ResponseEntity<NotificationResponseDTO> sendDepositNotification(
             @Valid @RequestBody DepositRequestDTO requestDTO) {
         return ResponseEntity.ok(notificationService.sendDepositNotification(requestDTO));
