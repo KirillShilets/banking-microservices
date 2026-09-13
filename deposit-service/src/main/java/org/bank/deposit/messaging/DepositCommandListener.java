@@ -17,15 +17,10 @@ public class DepositCommandListener {
 
     @RabbitListener(queues = RabbitTopology.DEPOSIT_SAVE_QUEUE)
     public void handleDepositCommand(DepositRequestDTO request) {
-        if (request == null || request.billId() == null || request.amount() == null || request.email() == null) {
-            log.warn("Skipped invalid deposit command payload");
-            return;
+        if (request == null || request.billId() == null || request.amount() == null
+                || request.email() == null || request.messageId() == null) {
+            throw new IllegalArgumentException("Invalid deposit command payload");
         }
-
-        try {
-            depositService.saveDeposit(request.billId(), request.amount(), request.email());
-        } catch (RuntimeException ex) {
-            log.error("Failed to persist deposit command for billId={}", request.billId(), ex);
-        }
+        depositService.saveDeposit(request.billId(), request.amount(), request.email(), request.messageId());
     }
 }

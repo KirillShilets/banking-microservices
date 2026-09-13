@@ -1,9 +1,8 @@
 package org.bank.bill.service;
 
 import org.bank.bill.entity.Bill;
-import org.bank.bill.handler.event.DepositEvent;
-import org.bank.bill.handler.event.NotificationEvent;
 import org.bank.bill.messaging.AccountQueryGateway;
+import org.bank.bill.outbox.OutboxService;
 import org.bank.bill.repository.BillRepository;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
@@ -19,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -52,7 +50,7 @@ class BillServiceUnitTest {
     private AccountQueryGateway accountQueryGateway;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private OutboxService outboxService;
 
     @Mock
     private AuthenticatedUser authenticatedUser;
@@ -64,9 +62,10 @@ class BillServiceUnitTest {
         billService = new BillServiceImpl(
                 billRepository,
                 accountQueryGateway,
-                eventPublisher,
+                outboxService,
                 authenticatedUser,
-                MIN_DEPOSIT_LIMIT
+                MIN_DEPOSIT_LIMIT,
+                true
         );
     }
 
@@ -137,121 +136,81 @@ class BillServiceUnitTest {
     }
 
     @Test
-    @DisplayName("Should create a new bill successfully")
+    @DisplayName("Should open a bill with zero balance")
     void createBill_success() {
         asAdmin();
-        when(accountQueryGateway.getAccount(ACCOUNT_ID)).thenReturn(account());
 
-        Bill saved = new Bill(ACCOUNT_ID, AMOUNT_100, false);
+        when(accountQueryGateway.getAccount(ACCOUNT_ID))
+                .thenReturn(account());
+
+        Bill saved = new Bill(
+                ACCOUNT_ID,
+                BigDecimal.ZERO,
+                false
+        );
         saved.setBillId(100L);
 
-        when(billRepository.existsBillByAccountId(ACCOUNT_ID)).thenReturn(false);
-        when(billRepository.save(any(Bill.class))).thenReturn(saved);
+        when(billRepository.existsBillByAccountId(ACCOUNT_ID))
+                .thenReturn(false);
+        when(billRepository.save(any(Bill.class)))
+                .thenReturn(saved);
 
-        Long billId = billService.createBill(ACCOUNT_ID, AMOUNT_100, false);
+        Long billId = billService.createBill(
+                ACCOUNT_ID,
+                BigDecimal.ZERO,
+                false
+        );
 
         assertEquals(100L, billId);
+
         verify(billRepository).save(any(Bill.class));
-    }
-
-    @Test
-    @DisplayName("Should update existing bill details")
-    void updateBill_success() {
-        asAdmin();
-        Bill bill = bill();
-
-        when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
-        when(accountQueryGateway.getAccount(ACCOUNT_ID)).thenReturn(account());
-        when(billRepository.save(any(Bill.class))).thenReturn(bill);
-
-        BillResponseDTO dto = billService.updateBill(BILL_ID, ACCOUNT_ID, AMOUNT_100, true);
-
-        assertEquals(AMOUNT_100, dto.amount());
-        assertTrue(dto.overdraftEnabled());
     }
 
     @Test
     @DisplayName("Should deposit funds, update balance and publish events")
     void depositBill_success() {
         asAdmin();
+
         Bill bill = bill();
         bill.setCreationDate(OffsetDateTime.now());
 
-        when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
-        when(accountQueryGateway.getAccount(ACCOUNT_ID)).thenReturn(account());
-        when(billRepository.save(any(Bill.class))).thenReturn(bill);
+        when(billRepository.findByIdForUpdate(BILL_ID))
+                .thenReturn(Optional.of(bill));
 
-        BillDepositResponseDTO response = billService.depositBill(BILL_ID, DEPOSIT_20, EMAIL);
+        when(accountQueryGateway.getAccount(ACCOUNT_ID))
+                .thenReturn(account());
 
-        assertEquals(AMOUNT_100.add(DEPOSIT_20), response.amount());
-        verify(eventPublisher, times(1)).publishEvent(any(NotificationEvent.class));
-        verify(eventPublisher, times(1)).publishEvent(any(DepositEvent.class));
+        BillDepositResponseDTO response =
+                billService.depositBill(BILL_ID, DEPOSIT_20);
+
+        assertEquals(
+                AMOUNT_100.add(DEPOSIT_20),
+                response.amount()
+        );
+
+        verify(outboxService, times(2)).saveEvent(
+                eq("BILL"),
+                eq(BILL_ID.toString()),
+                anyString(),
+                any()
+        );
     }
 
     @Test
     @DisplayName("Should throw BadRequestException when deposit amount is too small")
     void depositBill_tooSmallAmount() {
-        assertThrows(
-                BadRequestException.class,
-                () -> billService.depositBill(BILL_ID, WRONG_DEPOSIT, EMAIL)
-        );
-
-        verify(billRepository, never()).save(any());
-        verifyNoInteractions(eventPublisher, accountQueryGateway);
-    }
-
-    @Test
-    @DisplayName("Should throw BadRequestException when email does not match account owner")
-    void depositBill_wrongEmail() {
         asAdmin();
-        when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill()));
-        when(accountQueryGateway.getAccount(ACCOUNT_ID)).thenReturn(account());
 
         assertThrows(
                 BadRequestException.class,
-                () -> billService.depositBill(BILL_ID, DEPOSIT_20, "testdfguihdfjg@internet.com")
+                () -> billService.depositBill(
+                        BILL_ID,
+                        WRONG_DEPOSIT
+                )
         );
+
+        verify(billRepository, never()).findByIdForUpdate(anyLong());
         verify(billRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("Should delete bill when it exists")
-    void deleteBill_success() {
-        asAdmin();
-        Bill bill = bill();
-        when(billRepository.findById(BILL_ID)).thenReturn(Optional.of(bill));
-        when(accountQueryGateway.getAccount(ACCOUNT_ID)).thenReturn(account());
-
-        billService.deleteBill(BILL_ID);
-
-        verify(billRepository).delete(bill);
-    }
-
-    @Test
-    @DisplayName("Should throw NotFoundException when attempting to delete non-existent bill")
-    void deleteBill_notFound() {
-        when(billRepository.findById(NON_EXISTENT_ID)).thenReturn(Optional.empty());
-
-        assertThrows(NotFoundException.class, () -> billService.deleteBill(NON_EXISTENT_ID));
-        verify(billRepository, never()).delete(any());
-    }
-
-    @Test
-    @DisplayName("Should delete all bills of account when user is admin")
-    void deleteBillsByAccountId_admin_success() {
-        asAdmin();
-
-        billService.deleteBillsByAccountId(ACCOUNT_ID);
-
-        verify(billRepository).deleteBillsByAccountId(ACCOUNT_ID);
-    }
-
-    @Test
-    @DisplayName("Should throw ForbiddenException when non-admin deletes all bills of account")
-    void deleteBillsByAccountId_nonAdmin_forbidden() {
-        when(authenticatedUser.hasRole(BankRoles.ADMIN)).thenReturn(false);
-
-        assertThrows(ForbiddenException.class, () -> billService.deleteBillsByAccountId(ACCOUNT_ID));
-        verify(billRepository, never()).deleteBillsByAccountId(any());
+        verifyNoInteractions(outboxService, accountQueryGateway);
     }
 }

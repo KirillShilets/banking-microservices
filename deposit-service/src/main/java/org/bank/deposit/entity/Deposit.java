@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -33,14 +34,22 @@ public class Deposit {
     @Column(name = "email", nullable = false, length = 127)
     private String email;
 
+    @Column(name = "message_id", nullable = false, unique = true, updatable = false)
+    private UUID messageId;
+
     @CreationTimestamp
     @Column(name = "creation_date", nullable = false, updatable = false)
     private OffsetDateTime creationDate;
 
-    public Deposit(BigDecimal amount, Long billId, String email, OffsetDateTime creationDate) {
+    public Deposit(BigDecimal amount, Long billId, String email, OffsetDateTime creationDate, UUID messageId) {
         this.amount = amount;
         this.billId = billId;
         this.creationDate = creationDate;
         this.email = email;
+        this.messageId = messageId;
+    }
+
+    public Deposit(BigDecimal amount, Long billId, String email, OffsetDateTime creationDate) {
+        this(amount, billId, email, creationDate, UUID.randomUUID());
     }
 }

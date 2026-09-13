@@ -17,15 +17,10 @@ public class NotificationCommandListener {
 
     @RabbitListener(queues = RabbitTopology.NOTIFICATION_DEPOSIT_QUEUE)
     public void handleNotificationCommand(DepositRequestDTO request) {
-        if (request == null || request.billId() == null || request.amount() == null || request.email() == null) {
-            log.warn("Skipped invalid notification command payload");
-            return;
+        if (request == null || request.billId() == null || request.amount() == null
+                || request.email() == null || request.messageId() == null) {
+            throw new IllegalArgumentException("Invalid notification command payload");
         }
-
-        try {
-            notificationService.sendDepositNotification(request);
-        } catch (RuntimeException ex) {
-            log.error("Failed to process notification command for billId={}", request.billId(), ex);
-        }
+        notificationService.sendDepositNotification(request);
     }
 }

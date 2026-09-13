@@ -8,6 +8,15 @@ spring:
       enabled: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
+    enabled: false
+  datasource:
+    url: jdbc:h2:mem:notification;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
   rabbitmq:
     dynamic: false
     listener:

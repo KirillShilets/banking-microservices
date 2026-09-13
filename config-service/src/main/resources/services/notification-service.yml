@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: notification-service
+  datasource:
+    url: jdbc:postgresql://postgres:5432/notification_service_database
+    username: ${NOTIFICATION_DB_USER:notification_service_admin}
+    password: ${NOTIFICATION_DB_PASSWORD:notificationserviceadmin}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
   mvc:
     throw-exception-if-no-handler-found: true
   web:
@@ -22,6 +31,11 @@ spring:
             enable: true
 
 management:
+  health:
+    mail:
+      enabled: false
   endpoint:
     health:
-      show-details: always
+      probes:
+        enabled: true
+      show-details: never

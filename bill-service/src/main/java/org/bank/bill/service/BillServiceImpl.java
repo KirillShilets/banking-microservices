@@ -1,11 +1,11 @@
 package org.bank.bill.service;
 
 import org.bank.bill.entity.Bill;
-import org.bank.bill.handler.event.DepositEvent;
-import org.bank.bill.handler.event.NotificationEvent;
 import org.bank.bill.messaging.AccountQueryGateway;
+import org.bank.bill.outbox.OutboxService;
 import org.bank.bill.repository.BillRepository;
 import org.bank.dto.request.CreateBillRequestDTO;
+import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
@@ -14,13 +14,15 @@ import org.bank.exception.ForbiddenException;
 import org.bank.exception.NotFoundException;
 import org.bank.security.BankRoles;
 import org.bank.security.web.AuthenticatedUser;
+import org.bank.validation.BillOpeningValidator;
+import org.bank.validation.MoneyValidation;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,21 +30,38 @@ public class BillServiceImpl implements BillService {
 
     private final BillRepository billRepository;
     private final AccountQueryGateway accountQueryGateway;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxService outboxService;
     private final AuthenticatedUser authenticatedUser;
 
     private final BigDecimal minDepositAmount;
+    private final boolean sandboxDepositsEnabled;
 
-    public BillServiceImpl(BillRepository billRepository,
-                           AccountQueryGateway accountQueryGateway,
-                           ApplicationEventPublisher eventPublisher,
-                           AuthenticatedUser authenticatedUser,
-                           @Value("${app.deposit.min-amount:2.60}") BigDecimal minDepositAmount) {
+    public BillServiceImpl(
+            BillRepository billRepository,
+            AccountQueryGateway accountQueryGateway,
+            OutboxService outboxService,
+            AuthenticatedUser authenticatedUser,
+            @Value("${app.deposit.min-amount:10.00}")
+            BigDecimal minDepositAmount,
+            @Value("${app.sandbox.deposits-enabled:false}")
+            boolean sandboxDepositsEnabled
+    ) {
         this.billRepository = billRepository;
         this.accountQueryGateway = accountQueryGateway;
-        this.eventPublisher = eventPublisher;
+        this.outboxService = outboxService;
         this.authenticatedUser = authenticatedUser;
-        this.minDepositAmount = minDepositAmount;
+
+        try {
+            this.minDepositAmount =
+                    MoneyValidation.positiveAmount(minDepositAmount);
+        } catch (BadRequestException exception) {
+            throw new IllegalArgumentException(
+                    "app.deposit.min-amount must be a valid positive monetary amount",
+                    exception
+            );
+        }
+
+        this.sandboxDepositsEnabled = sandboxDepositsEnabled;
     }
 
     @Override
@@ -50,124 +69,228 @@ public class BillServiceImpl implements BillService {
     public BillResponseDTO getBill(Long billId) {
         Bill bill = getBillById(billId);
         assertCanAccessBill(bill);
-        return createResponseBillDTO(bill);
+
+        return toResponse(bill);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<BillResponseDTO> getBillsByAccountId(Long accountId) {
+        BillOpeningValidator.validateAccountId(accountId);
         assertCanAccessAccount(accountId);
-        return billRepository.getBillsByAccountId(accountId).stream()
-                .map(this::createResponseBillDTO)
+
+        return billRepository.getBillsByAccountId(accountId)
+                .stream()
+                .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional
-    public Long createBill(Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
+    public Long createBill(
+            Long accountId,
+            BigDecimal amount,
+            Boolean overdraftEnabled
+    ) {
+        BillOpeningValidator.validateAccountId(accountId);
+        BillOpeningValidator.validateOpening(amount, overdraftEnabled);
+
         assertCanAccessAccount(accountId);
-        Bill bill = new Bill(accountId, amount, overdraftEnabled);
+
+        Bill bill = new Bill(
+                accountId,
+                new BigDecimal("0.00"),
+                false
+        );
+
         if (!billRepository.existsBillByAccountId(accountId)) {
             bill.setIsDefault(true);
         }
+
         return billRepository.save(bill).getBillId();
     }
 
     @Override
     @Transactional
-    public List<Long> createBillsForAccount(Long accountId, List<CreateBillRequestDTO> bills) {
+    public List<Long> createBillsForAccount(
+            Long accountId,
+            List<CreateBillRequestDTO> bills
+    ) {
+        BillOpeningValidator.validateAccountId(accountId);
+        BillOpeningValidator.validateOpenings(bills);
+
         assertCanAccessAccount(accountId);
+
+        return saveBillsForAccount(accountId, bills);
+    }
+
+    @Override
+    @Transactional
+    public List<Long> createBillsForAccountInternal(
+            Long accountId,
+            List<CreateBillRequestDTO> bills
+    ) {
+        BillOpeningValidator.validateAccountId(accountId);
+        BillOpeningValidator.validateOpenings(bills);
+
+        return saveBillsForAccount(accountId, bills);
+    }
+
+    @Override
+    @Transactional
+    public BillDepositResponseDTO depositBill(
+            Long billId,
+            BigDecimal amount
+    ) {
+        assertSandboxDepositAllowed();
+
+        if (billId == null || billId <= 0) {
+            throw new BadRequestException("Bill id must be positive");
+        }
+
+        BigDecimal normalizedAmount =
+                MoneyValidation.positiveAmount(amount);
+
+        if (normalizedAmount.compareTo(minDepositAmount) < 0) {
+            throw new BadRequestException(
+                    "Deposit amount is less than minimum: "
+                            + minDepositAmount.toPlainString()
+            );
+        }
+
+        Bill bill = billRepository.findByIdForUpdate(billId)
+                .orElseThrow(() -> new NotFoundException(
+                        "Bill not found with id: " + billId
+                ));
+
+        AccountResponseDTO account = assertCanAccessBill(bill);
+
+        String recipient = account.email();
+
+        if (recipient == null || recipient.isBlank()) {
+            throw new IllegalStateException(
+                    "Account contact email is missing"
+            );
+        }
+
+        BigDecimal currentBalance =
+                MoneyValidation.checkedBalance(bill.getAmount());
+
+        BigDecimal newBalance =
+                MoneyValidation.checkedBalance(
+                        currentBalance.add(normalizedAmount)
+                );
+
+        bill.setAmount(newBalance);
+
+        outboxService.saveEvent(
+                "BILL",
+                billId.toString(),
+                "DEPOSIT_CREATED",
+                new DepositRequestDTO(
+                        billId,
+                        normalizedAmount,
+                        recipient,
+                        UUID.randomUUID()
+                )
+        );
+
+        outboxService.saveEvent(
+                "BILL",
+                billId.toString(),
+                "NOTIFICATION_CREATED",
+                new DepositRequestDTO(
+                        billId,
+                        normalizedAmount,
+                        recipient,
+                        UUID.randomUUID()
+                )
+        );
+
+        return new BillDepositResponseDTO(
+                bill.getBillId(),
+                bill.getAccountId(),
+                bill.getAmount(),
+                recipient,
+                bill.getIsDefault(),
+                bill.getOverdraftEnabled(),
+                bill.getCreationDate()
+        );
+    }
+
+    private void assertSandboxDepositAllowed() {
+        if (!sandboxDepositsEnabled) {
+            throw new ForbiddenException(
+                    "Sandbox deposits are disabled"
+            );
+        }
+
+        if (!authenticatedUser.hasRole(BankRoles.ADMIN)
+                && !authenticatedUser.hasRole(BankRoles.EMPLOYEE)) {
+            throw new ForbiddenException(
+                    "Sandbox deposits require employee or admin role"
+            );
+        }
+    }
+
+    private List<Long> saveBillsForAccount(
+            Long accountId,
+            List<CreateBillRequestDTO> bills
+    ) {
         List<Bill> billsToSave = bills.stream()
-                .map(dto -> new Bill(accountId, dto.amount(), dto.overdraftEnabled()))
+                .map(ignored -> new Bill(
+                        accountId,
+                        new BigDecimal("0.00"),
+                        false
+                ))
                 .collect(Collectors.toList());
 
-        if (!billsToSave.isEmpty() && !billRepository.existsBillByAccountId(accountId)) {
+        if (!billRepository.existsBillByAccountId(accountId)) {
             billsToSave.get(0).setIsDefault(true);
         }
 
-        return billRepository.saveAll(billsToSave).stream()
+        return billRepository.saveAll(billsToSave)
+                .stream()
                 .map(Bill::getBillId)
                 .collect(Collectors.toList());
     }
 
-    @Override
-    @Transactional
-    public BillResponseDTO updateBill(Long billId, Long accountId, BigDecimal amount, Boolean overdraftEnabled) {
-        Bill billToUpdate = getBillById(billId);
-        assertCanAccessBill(billToUpdate);
-
-        if (!accountId.equals(billToUpdate.getAccountId())) {
-            assertCanAccessAccount(accountId);
-        }
-
-        billToUpdate.setAccountId(accountId);
-        billToUpdate.setAmount(amount);
-        billToUpdate.setOverdraftEnabled(overdraftEnabled);
-        return createResponseBillDTO(billRepository.save(billToUpdate));
-    }
-
-    @Override
-    @Transactional
-    public BillDepositResponseDTO depositBill(Long billId, BigDecimal amount, String email) {
-        if (amount.compareTo(minDepositAmount) < 0) {
-            throw new BadRequestException("Deposit amount " + amount + " is less than minimum required: " + minDepositAmount);
-        }
-
-        Bill bill = getBillById(billId);
-        AccountResponseDTO account = assertCanAccessBill(bill);
-
-        if (!account.email().equalsIgnoreCase(email)) {
-            throw new BadRequestException("Provided email: " + email + " does not belong to account owner");
-        }
-
-        bill.setAmount(bill.getAmount().add(amount));
-        billRepository.save(bill);
-
-        eventPublisher.publishEvent(new NotificationEvent(billId, amount, email));
-        eventPublisher.publishEvent(new DepositEvent(billId, amount, email));
-        return new BillDepositResponseDTO(billId, bill.getAccountId(), bill.getAmount(), email,
-                bill.getIsDefault(), bill.getOverdraftEnabled(), bill.getCreationDate());
-    }
-
-    @Override
-    @Transactional
-    public void deleteBill(Long billId) {
-        Bill bill = getBillById(billId);
-        assertCanAccessBill(bill);
-        billRepository.delete(bill);
-    }
-
-    @Override
-    @Transactional
-    public void deleteBillsByAccountId(Long accountId) {
-        if (!authenticatedUser.hasRole(BankRoles.ADMIN)) {
-            throw new ForbiddenException("Only admin can delete all bills of an account");
-        }
-        billRepository.deleteBillsByAccountId(accountId);
-    }
-
     private Bill getBillById(Long billId) {
+        if (billId == null || billId <= 0) {
+            throw new BadRequestException("Bill id must be positive");
+        }
+
         return billRepository.findById(billId)
-                .orElseThrow(() -> new NotFoundException("Unable to find bill with id: " + billId));
+                .orElseThrow(() -> new NotFoundException(
+                        "Unable to find bill with id: " + billId
+                ));
     }
 
     private AccountResponseDTO assertCanAccessAccount(Long accountId) {
-        AccountResponseDTO account = accountQueryGateway.getAccount(accountId);
-        if (authenticatedUser.hasRole(BankRoles.ADMIN) || authenticatedUser.hasRole(BankRoles.EMPLOYEE)) {
+        AccountResponseDTO account =
+                accountQueryGateway.getAccount(accountId);
+
+        if (authenticatedUser.hasRole(BankRoles.ADMIN)
+                || authenticatedUser.hasRole(BankRoles.EMPLOYEE)) {
             return account;
         }
+
         if (authenticatedUser.hasRole(BankRoles.CUSTOMER)
-                && authenticatedUser.subject().equals(account.ownerSubject())) {
+                && authenticatedUser.subject()
+                .equals(account.ownerSubject())) {
             return account;
         }
-        throw new ForbiddenException("Access to this account's bills is denied");
+
+        throw new ForbiddenException(
+                "Access to this account's bills is denied"
+        );
     }
 
     private AccountResponseDTO assertCanAccessBill(Bill bill) {
         return assertCanAccessAccount(bill.getAccountId());
     }
 
-    private BillResponseDTO createResponseBillDTO(Bill bill) {
+    private BillResponseDTO toResponse(Bill bill) {
         return new BillResponseDTO(
                 bill.getBillId(),
                 bill.getAccountId(),

@@ -7,6 +7,7 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
@@ -27,28 +28,88 @@ public class RabbitMessagingConfiguration {
     }
 
     @Bean
+    public DirectExchange deadLetterExchange() {
+        return new DirectExchange(RabbitTopology.DEAD_LETTER_EXCHANGE, true, false);
+    }
+
+    @Bean
     public Queue billCreateForAccountQueue() {
-        return QueueBuilder.durable(RabbitTopology.BILL_CREATE_FOR_ACCOUNT_QUEUE).build();
+        return deadLetteredQueue(RabbitTopology.BILL_CREATE_FOR_ACCOUNT_QUEUE, RabbitTopology.BILL_CREATE_FOR_ACCOUNT_ROUTING_KEY);
     }
 
     @Bean
     public Queue billDeleteByAccountQueue() {
-        return QueueBuilder.durable(RabbitTopology.BILL_DELETE_BY_ACCOUNT_QUEUE).build();
+        return deadLetteredQueue(RabbitTopology.BILL_DELETE_BY_ACCOUNT_QUEUE, RabbitTopology.BILL_DELETE_BY_ACCOUNT_ROUTING_KEY);
     }
 
     @Bean
     public Queue depositSaveQueue() {
-        return QueueBuilder.durable(RabbitTopology.DEPOSIT_SAVE_QUEUE).build();
+        return deadLetteredQueue(RabbitTopology.DEPOSIT_SAVE_QUEUE, RabbitTopology.DEPOSIT_SAVE_ROUTING_KEY);
     }
 
     @Bean
     public Queue notificationDepositQueue() {
-        return QueueBuilder.durable(RabbitTopology.NOTIFICATION_DEPOSIT_QUEUE).build();
+        return deadLetteredQueue(RabbitTopology.NOTIFICATION_DEPOSIT_QUEUE, RabbitTopology.NOTIFICATION_DEPOSIT_ROUTING_KEY);
     }
 
     @Bean
     public Queue accountQueryQueue() {
-        return QueueBuilder.durable(RabbitTopology.ACCOUNT_QUERY_QUEUE).build();
+        return deadLetteredQueue(RabbitTopology.ACCOUNT_QUERY_QUEUE, RabbitTopology.ACCOUNT_QUERY_ROUTING_KEY);
+    }
+
+    @Bean
+    public Queue billCreateForAccountDlq() {
+        return QueueBuilder.durable(RabbitTopology.BILL_CREATE_FOR_ACCOUNT_DLQ).build();
+    }
+
+    @Bean
+    public Queue billDeleteByAccountDlq() {
+        return QueueBuilder.durable(RabbitTopology.BILL_DELETE_BY_ACCOUNT_DLQ).build();
+    }
+
+    @Bean
+    public Queue depositSaveDlq() {
+        return QueueBuilder.durable(RabbitTopology.DEPOSIT_SAVE_DLQ).build();
+    }
+
+    @Bean
+    public Queue notificationDepositDlq() {
+        return QueueBuilder.durable(RabbitTopology.NOTIFICATION_DEPOSIT_DLQ).build();
+    }
+
+    @Bean
+    public Queue accountQueryDlq() {
+        return QueueBuilder.durable(RabbitTopology.ACCOUNT_QUERY_DLQ).build();
+    }
+
+    @Bean
+    public Binding billCreateForAccountDlqBinding(@Qualifier("billCreateForAccountDlq") Queue queue,
+                                                  DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(queue).to(deadLetterExchange).with(RabbitTopology.BILL_CREATE_FOR_ACCOUNT_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding billDeleteByAccountDlqBinding(@Qualifier("billDeleteByAccountDlq") Queue queue,
+                                                 DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(queue).to(deadLetterExchange).with(RabbitTopology.BILL_DELETE_BY_ACCOUNT_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding depositSaveDlqBinding(@Qualifier("depositSaveDlq") Queue queue,
+                                         DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(queue).to(deadLetterExchange).with(RabbitTopology.DEPOSIT_SAVE_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding notificationDepositDlqBinding(@Qualifier("notificationDepositDlq") Queue queue,
+                                                 DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(queue).to(deadLetterExchange).with(RabbitTopology.NOTIFICATION_DEPOSIT_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding accountQueryDlqBinding(@Qualifier("accountQueryDlq") Queue queue,
+                                         DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(queue).to(deadLetterExchange).with(RabbitTopology.ACCOUNT_QUERY_ROUTING_KEY);
     }
 
     @Bean
@@ -105,6 +166,14 @@ public class RabbitMessagingConfiguration {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
         rabbitTemplate.setMessageConverter(rabbitMessageConverter);
         rabbitTemplate.setReplyTimeout(accountRpcTimeoutMs);
+        rabbitTemplate.setMandatory(true);
         return rabbitTemplate;
+    }
+
+    private Queue deadLetteredQueue(String queueName, String routingKey) {
+        return QueueBuilder.durable(queueName)
+                .deadLetterExchange(RabbitTopology.DEAD_LETTER_EXCHANGE)
+                .deadLetterRoutingKey(routingKey)
+                .build();
     }
 }

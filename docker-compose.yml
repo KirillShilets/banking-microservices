@@ -135,6 +135,7 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
+      APP_SANDBOX_DEPOSITS_ENABLED: ${SANDBOX_DEPOSITS_ENABLED:-false}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bill_service_database
       SPRING_DATASOURCE_USERNAME: ${BILL_DB_USER}
@@ -227,6 +228,8 @@ services:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     environment:
@@ -235,12 +238,15 @@ services:
       MAIL_PORT: ${MAIL_PORT}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notification_service_database
+      SPRING_DATASOURCE_USERNAME: ${NOTIFICATION_DB_USER:-notification_service_admin}
+      SPRING_DATASOURCE_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notificationserviceadmin}
       SPRING_SECURITY_USER_NAME: ${SPRING_SECURITY_USER_NAME}
       SPRING_SECURITY_PASSWORD: ${SPRING_SECURITY_PASSWORD}
     networks:
       - bank-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9999/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9999/actuator/health/liveness"]
       interval: 10s
       timeout: 5s
       retries: 10

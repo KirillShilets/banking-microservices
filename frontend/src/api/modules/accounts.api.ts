@@ -10,18 +10,23 @@ import type {
 
 export const accountsApi = {
   getAccount: (accountId: number) =>
-    apiRequest.get<AccountResponseDTO>(`/accounts/${accountId}`),
+      apiRequest.get<AccountResponseDTO>(`/accounts/${accountId}`),
 
-  getCurrentAccount: () => apiRequest.get<AccountResponseDTO>('/accounts/me'),
+  getCurrentAccount: () =>
+      apiRequest.get<AccountResponseDTO>('/accounts/me'),
 
   createAccount: (payload: AccountRequestDTO) =>
-    apiRequest.post<number, AccountRequestDTO>('/accounts', payload),
+      apiRequest.post<number, AccountRequestDTO>(
+          '/accounts',
+          payload,
+      ),
 
-  updateAccount: (accountId: number, payload: UpdateAccountRequestDTO) =>
-    apiRequest.put<UpdateAccountResponseDTO, UpdateAccountRequestDTO>(
-      `/accounts/${accountId}`,
-      payload,
-    ),
-
-  deleteAccount: (accountId: number) => apiRequest.delete(`/accounts/${accountId}`),
+  updateAccount: (
+      accountId: number,
+      payload: UpdateAccountRequestDTO,
+  ) =>
+      apiRequest.put<UpdateAccountResponseDTO, UpdateAccountRequestDTO>(
+          `/accounts/${accountId}`,
+          payload,
+      ),
 }

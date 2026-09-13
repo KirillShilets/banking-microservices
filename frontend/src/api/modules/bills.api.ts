@@ -1,37 +1,45 @@
 ﻿import { apiRequest } from '../core'
 import type {
-  BillRequestDTO,
-  CreateBillRequestDTO,
-  DepositRequestDTO,
+    BillRequestDTO,
+    CreateBillRequestDTO,
 } from '../../dto/request'
-import type { BillDepositResponseDTO, BillResponseDTO } from '../../dto/response'
+import type {
+    BillDepositResponseDTO,
+    BillResponseDTO,
+} from '../../dto/response'
+
+export interface SandboxDepositRequest {
+    billId: number
+    amount: string
+}
 
 export const billsApi = {
-  getBill: (billId: number) => apiRequest.get<BillResponseDTO>(`/bills/${billId}`),
+    getBill: (billId: number) =>
+        apiRequest.get<BillResponseDTO>(`/bills/${billId}`),
 
-  getBillsByAccount: (accountId: number) =>
-    apiRequest.get<BillResponseDTO[]>(`/bills/accounts/${accountId}`),
+    getBillsByAccount: (accountId: number) =>
+        apiRequest.get<BillResponseDTO[]>(
+            `/bills/accounts/${accountId}`,
+        ),
 
-  createBill: (payload: BillRequestDTO) =>
-    apiRequest.post<number, BillRequestDTO>('/bills', payload),
+    createBill: (payload: BillRequestDTO) =>
+        apiRequest.post<number, BillRequestDTO>(
+            '/bills',
+            payload,
+        ),
 
-  createBillsForAccount: (accountId: number, bills: CreateBillRequestDTO[]) =>
-    apiRequest.post<number[], CreateBillRequestDTO[]>(
-      `/bills/accounts/${accountId}`,
-      bills,
-    ),
+    createBillsForAccount: (
+        accountId: number,
+        bills: CreateBillRequestDTO[],
+    ) =>
+        apiRequest.post<number[], CreateBillRequestDTO[]>(
+            `/bills/accounts/${accountId}`,
+            bills,
+        ),
 
-  updateBill: (billId: number, payload: BillRequestDTO) =>
-    apiRequest.put<BillResponseDTO, BillRequestDTO>(`/bills/${billId}`, payload),
-
-  depositBill: (payload: DepositRequestDTO) =>
-    apiRequest.post<BillDepositResponseDTO, DepositRequestDTO>(
-      '/bills/deposits',
-      payload,
-    ),
-
-  deleteBill: (billId: number) => apiRequest.delete(`/bills/${billId}`),
-
-  deleteBillsByAccount: (accountId: number) =>
-    apiRequest.delete(`/bills/accounts/${accountId}`),
+    depositBill: (payload: SandboxDepositRequest) =>
+        apiRequest.post<BillDepositResponseDTO, SandboxDepositRequest>(
+            '/bills/sandbox/deposits',
+            payload,
+        ),
 }

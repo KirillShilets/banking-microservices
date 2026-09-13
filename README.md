@@ -1,219 +1,267 @@
 # 🏦 Spring Cloud Banking System
 
-Spring Cloud Banking System — учебный проект распределённой банковской системы на микросервисной архитектуре с использованием Spring Cloud и Docker.
-Проект демонстрирует основные паттерны микросервисов: Service Discovery, Centralized Configuration, API Gateway, Fault Tolerance, асинхронное взаимодействие через события, а также аутентификацию и авторизацию через Keycloak (OAuth2 / OIDC).
+Учебная банковская система на микросервисной архитектуре. Проект показывает, как связать Spring Boot-сервисы через Config Server, Eureka, API Gateway и RabbitMQ, а также как добавить OAuth2/OIDC-аутентификацию через Keycloak.
 
----
+## ✨ Возможности
 
-## 🛠 Технологический стек
+- управление аккаунтами клиентов;
+- создание и просмотр банковских счетов;
+- пополнение счета в sandbox-режиме;
+- асинхронное сохранение операций депозитов;
+- асинхронная отправка email-уведомлений;
+- JWT-аутентификация и роли customer, employee, admin;
+- PostgreSQL с Liquibase-миграциями;
+- unit- и integration-тесты с Testcontainers.
 
-**Core**
+## 🧩 Архитектура
 
-* Java 17
-* Spring Boot 3.5.6
-* Spring Cloud 2025.0.0
-* Gradle (Multi-module project)
+~~~text
+Frontend (React/Vite, :3000)
+        |
+        v
+API Gateway (:8989) ---- Keycloak (:8080)
+        |
+        +--> account-service (:8081)
+        +--> bill-service (:8082)
+        +--> deposit-service (:8083)
 
-**Security**
+config-service (:8001) <---- все Spring-сервисы
+discovery-service (:8761) <-- Eureka
+RabbitMQ (:5672, :15672) <-- асинхронные команды и события
+PostgreSQL                 <-- отдельная БД для каждого сервиса
+notification-service (:9999) <-- email-уведомления
+~~~
 
-* Keycloak 26 — Identity Provider (OIDC, Authorization Code + PKCE)
-* Spring Security OAuth2 Resource Server — проверка JWT на gateway и в каждом сервисе
-* Role-based access (realm roles `admin` / `employee` / `customer`) + проверка владельца ресурса
+Бизнес-сервисы не публикуют свои HTTP-порты наружу. Для внешних запросов используется Gateway.
 
-**Infrastructure & Cloud**
+## 📡 Сервисы и порты
 
-* Spring Cloud Netflix Eureka — Service Discovery
-* Spring Cloud Config — Централизованное управление конфигурацией
-* Spring Cloud Gateway — API Gateway (Reactive/WebFlux)
-* RabbitMQ (AMQP) — межсервисное взаимодействие (commands + RPC)
+| Компонент | Порт | Назначение |
+|---|---:|---|
+| Frontend | 3000 | Web-интерфейс |
+| Keycloak | 8080 | OIDC-провайдер и пользовательские роли |
+| Config Service | 8001 | Централизованная конфигурация |
+| Discovery Service | 8761 | Eureka Server |
+| Gateway Service | 8989 | Единая точка входа в API |
+| Account Service | 8081 | Аккаунты пользователей |
+| Bill Service | 8082 | Банковские счета и пополнения |
+| Deposit Service | 8083 | История депозитов |
+| Notification Service | 9999 | Отправка email |
+| RabbitMQ | 5672 / 15672 | AMQP и management UI |
 
-**Data & Persistence**
+## 🛠️ Технологии
 
-* PostgreSQL — Реляционная база данных
-* Liquibase — Управление миграциями БД
-* Spring Data JPA — ORM
+- Java 17;
+- Spring Boot 3.5.6;
+- Spring Cloud 2025.0.0;
+- Gradle multi-module;
+- Spring Cloud Config, Eureka и Gateway WebFlux;
+- Spring Security OAuth2 Resource Server;
+- Keycloak 26;
+- PostgreSQL 16, Spring Data JPA, Liquibase;
+- RabbitMQ;
+- React 19, TypeScript, Vite и Axios;
+- JUnit 5, Mockito и Testcontainers;
+- Docker Compose.
 
-**Frontend**
+## 🚀 Быстрый запуск
 
-* React + TypeScript + Vite
-* keycloak-js — логин/логаут, обновление токена
+### ✅ Требования
 
-**Utilities & Testing**
+- Docker Desktop с включенным Docker Engine;
+- Java 17 для запуска Gradle-тестов локально;
+- Node.js 20+ — только для локального запуска frontend.
 
-* Docker & Docker Compose — Контейнеризация и оркестрация
-* Resilience4j — Circuit Breaker (отказоустойчивость)
-* JUnit 5, Mockito — Unit тестирование
-* Testcontainers — Интеграционное тестирование с реальной БД
+### 1️⃣ Подготовить переменные окружения
 
----
+Скопируйте .env.example в .env:
 
-## 🧩 Архитектура сервисов
+~~~powershell
+Copy-Item .env.example .env
+~~~
 
-### Инфраструктурные сервисы
+.env не должен попадать в Git. Для реальной почты укажите доступный SMTP-сервер и пароль приложения. Для запуска без отправки реальных писем достаточно демонстрационных значений: healthcheck Notification Service не зависит от SMTP.
 
-| Сервис            | Порт | Описание                                                  |
-| ----------------- | ---- | --------------------------------------------------------- |
-| Config Service    | 8001 | Сервер конфигураций с Basic Auth.                         |
-| Discovery Service | 8761 | Eureka Server — реестр сервисов.                          |
-| Gateway Service   | 8989 | API Gateway: маршрутизация, фильтрация, обработка ошибок. |
-| Keycloak          | 8080 | Identity Provider, realm `bank-realm`.                    |
-| Frontend          | 3000 | SPA (nginx), ходит в Gateway с Bearer-токеном.            |
+### 2️⃣ Добавить hostname Keycloak
 
-### Бизнес-сервисы
+Токены содержат issuer http://keycloak.localhost:8080/realms/bank-realm. Добавьте в hosts:
 
-| Сервис               | Порт (внутр.) | Описание                                    |
-| -------------------- | ------------- | ------------------------------------------- |
-| Account Service      | 8081          | Управление пользователями и аккаунтами.     |
-| Bill Service         | 8082          | Управление счетами, переводами, депозитами. |
-| Deposit Service      | 8080          | Логика обработки депозитов.                 |
-| Notification Service | 9999          | Отправка email-уведомлений (SMTP).          |
-
-Бизнес-сервисы не публикуют порты наружу — доступ только через Gateway.
-
-### Общие библиотеки
-
-* `common-lib` — DTO, Exception Handlers, RabbitMQ topology/config
-* `common-test-lib` — Конфигурации для Testcontainers
-* `security-lib` — автоконфигурация Resource Server (servlet + reactive), маппинг ролей Keycloak в `ROLE_*`, `AuthenticatedUser`
-
----
-
-## 🔐 Безопасность
-
-**Поток аутентификации**
-
-1. Frontend перенаправляет пользователя на Keycloak (Authorization Code + PKCE, public client `banking-frontend`).
-2. Keycloak возвращает access token (JWT) с `realm_access.roles` и `aud: banking-frontend`.
-3. Frontend отправляет запросы в Gateway с заголовком `Authorization: Bearer <token>`.
-4. Gateway и каждый бизнес-сервис проверяют подпись (JWKS), `iss` и `aud`. Без валидного токена — `401`.
-5. Внутри сервисов права проверяются по ролям (`@PreAuthorize`) и по владельцу (`owner_subject` = `sub` из токена).
-
-**Матрица доступа**
-
-| Действие                          | customer                | employee | admin |
-| --------------------------------- |-------------------------| -------- | ----- |
-| Создать аккаунт                   | ✅ (один на юзера)       | ✅  | ✅    |
-| `GET /accounts/me`                | ✅                       | ✅       | ✅    |
-| Просмотр / изменение аккаунта     | только свой             | любой    | любой |
-| Удаление аккаунта                 | ❌                       | ❌       | ✅    |
-| Операции со счетами (bills)       | только своего аккаунта  | любые | любые |
-
-Чужой ресурс для `customer` → `403`, отсутствие токена → `401`.
-
-**Тестовые пользователи** (создаются при импорте realm; пароли временные — при первом входе Keycloak попросит сменить)
-
-| Логин           | Роль     | Пароль      |
-|-----------------| -------- | ----------- |
-| `customer.kira` | customer | `Qpass123`  |
-| `employee.bob`  | employee | `Qpass1234` |
-| `admin.kirill`  | admin    | `Qpass12345`|
-
-Открытые эндпоинты: `/actuator/health`, `/actuator/info`, `OPTIONS *` (CORS preflight).
-
----
-
-
-## 🚀 Запуск проекта
-
-Требуется Docker и Docker Compose.
-
-### 1. Клонирование репозитория
-
-```bash
-git clone https://github.com/KirillShilets/banking-microservices.git
-cd spring-cloud-banking-system
-```
-
-### 2. Сборка проекта (JAR файлы)
-
-```bash
-./gradlew clean build
-```
-
-### 3. Настройка окружения
-
-Создайте файл `.env` в корне проекта:
-
-```env
-# Database Credentials
-POSTGRES_USER=bank_user
-POSTGRES_PASSWORD=bankingadmin
-POSTGRES_EXTERNAL_PORT=5433
-
-# Service DB Users
-BILL_DB_USER=bill_service_admin
-BILL_DB_PASSWORD=billserviceadmin
-BILL_SERVICE_PORT=8082
-
-ACCOUNT_DB_USER=account_service_admin
-ACCOUNT_DB_PASSWORD=accountserviceadmin
-ACCOUNT_SERVICE_PORT=8081
-
-DEPOSIT_DB_USER=deposit_service_admin
-DEPOSIT_DB_PASSWORD=depositserviceadmin
-DEPOSIT_SERVICE_PORT=8080
-
-CONFIG_SERVICE_PORT=8001
-DISCOVERY_SERVICE_PORT=8761
-NOTIFICATION_SERVICE_PORT=9999
-GATEWAY_SERVICE_PORT=8989
-
-# Security
-SPRING_SECURITY_USER=user
-SPRING_SECURITY_PASSWORD=bankconfigadmin123
-
-# Business Logic Config
-DEPOSIT_MIN_AMOUNT=10.00
-
-# Mail Configuration
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=email@gmail.com
-MAIL_PASSWORD=app-password
-```
-
-### 4. Запуск через Docker Compose
-
-```bash
-docker-compose up --build
-```
-
-Docker Compose автоматически поднимет базу данных, инициализирует пользователей и запустит все микросервисы с Healthchecks.
-
-### 5. Доступ к интерфейсам
-
-* Eureka Dashboard: [http://localhost:8761](http://localhost:8761)
-* API Gateway: [http://localhost:8989](http://localhost:8989)
-* PostgreSQL: [http://localhost:5433](http://localhost:5433)
-* Frontend: [http://localhost:3000](http://localhost:3000)
-
-### 6. Добавить hostname Keycloak (необязательно)
-
-Браузер и сервисы должны видеть Keycloak под одним и тем же именем, иначе iss в токене не совпадёт с issuer-uri.
-Добавьте в файл hosts строку:
-
-```text
+~~~text
 127.0.0.1 keycloak.localhost
-```
+~~~
 
-* Windows: C:\Windows\System32\drivers\etc\hosts (редактор от администратора)
-* Linux / macOS: /etc/hosts
+В Windows файл находится в C:\Windows\System32\drivers\etc\hosts и требует прав администратора.
 
----
+### 3️⃣ Запустить систему
+
+~~~powershell
+docker compose up --build
+~~~
+
+Или в фоне:
+
+~~~powershell
+docker compose up -d --build
+docker compose ps
+~~~
+
+При изменении конфигурации пересоздайте зависимые сервисы:
+
+~~~powershell
+docker compose up -d --force-recreate --build config-service notification-service gateway-service
+~~~
+
+### 4️⃣ Открыть интерфейсы
+
+- Frontend: http://localhost:3000
+- Gateway: http://localhost:8989
+- Keycloak: http://keycloak.localhost:8080
+- Eureka: http://localhost:8761
+- RabbitMQ UI: http://localhost:15672
+
+### 🧹 Остановка и очистка
+
+~~~powershell
+docker compose down
+~~~
+
+Команда ниже удаляет PostgreSQL volume и все данные проекта:
+
+~~~powershell
+docker compose down -v
+~~~
+
+Используйте её только для полного сброса локальной базы.
+
+## 👥 Тестовые пользователи Keycloak
+
+Пользователи импортируются из keycloak/import/bank-realm-realm.json. Пароли учебные и отмечены в realm как временные: при первом входе Keycloak может попросить установить новый пароль.
+
+| Логин | Пароль | Роль | Назначение |
+|---|---|---|---|
+| customer.kira | Qpass123 | customer | Обычный клиент |
+| employee.bob | Qpass1234 | employee | Сотрудник банка |
+| admin.kirill | Qpass12345 | admin | Администратор |
+
+Это не учетные записи PostgreSQL и не учетные записи Config Server.
+
+| Система | Логин | Пароль |
+|---|---|---|
+| Keycloak Admin Console | значение KEYCLOAK_ADMIN | значение KEYCLOAK_ADMIN_PASSWORD |
+| Config Server Basic Auth | значение SPRING_SECURITY_USER_NAME | значение SPRING_SECURITY_PASSWORD |
+| RabbitMQ | значение RABBITMQ_USERNAME | значение RABBITMQ_PASSWORD |
+
+В .env.example указаны демонстрационные значения admin/change-me, user/change-me и bankmq/change-me. Перед публикацией проекта замените их и не коммитьте .env.
+
+## 🔐 API через Gateway
+
+Все защищенные запросы выполняются с заголовком:
+
+~~~http
+Authorization: Bearer <access-token>
+~~~
+
+### 👤 Accounts
+
+| Метод | URL | Доступ |
+|---|---|---|
+| GET | /accounts/me | любой авторизованный пользователь |
+| GET | /accounts/{accountId} | владелец, сотрудник или администратор |
+| POST | /accounts | customer, employee, admin; для клиента один аккаунт |
+| PUT | /accounts/{accountId} | владелец, сотрудник или администратор |
+
+### 💳 Bills
+
+| Метод | URL | Доступ |
+|---|---|---|
+| GET | /bills/{billId} | владелец, сотрудник или администратор |
+| GET | /bills/accounts/{accountId} | владелец, сотрудник или администратор |
+| POST | /bills | владелец, сотрудник или администратор |
+| POST | /bills/accounts/{accountId} | владелец, сотрудник или администратор |
+| POST | /bills/sandbox/deposits | employee или admin при включенном sandbox |
+
+Пополнение требует SANDBOX_DEPOSITS_ENABLED=true и сумму не меньше DEPOSIT_MIN_AMOUNT.
+
+### 💰 Deposits
+
+| Метод | URL | Доступ |
+|---|---|---|
+| GET | /deposits/{depositId} | employee или admin |
+
+Создание записи депозита происходит внутренней RabbitMQ-командой после пополнения счета.
+
+## 🔄 Асинхронный сценарий пополнения
+
+1. bill-service проверяет права, минимальную сумму и баланс.
+2. Баланс счета обновляется в PostgreSQL.
+3. Через outbox публикуются команды для deposit-service и notification-service.
+4. deposit-service сохраняет историю операции идемпотентно по messageId.
+5. notification-service отправляет email и сохраняет факт доставки.
+
+## ⚙️ Конфигурация
+
+Основные параметры находятся в .env.example:
+
+- PostgreSQL и пользователи отдельных баз данных;
+- Keycloak и Config Server;
+- RabbitMQ;
+- порты сервисов;
+- DEPOSIT_MIN_AMOUNT;
+- SANDBOX_DEPOSITS_ENABLED;
+- SMTP-параметры.
+
+Конфигурация Spring-сервисов хранится в config-service/src/main/resources/services. Config Server монтирует эту директорию в Docker-контейнер.
+
+## 🧪 Проверка проекта
+
+~~~powershell
+.\gradlew.bat test
+~~~
+
+Интеграционные тесты используют Testcontainers и требуют работающий Docker Engine. Для frontend:
+
+~~~powershell
+cd frontend
+npm ci
+npm run lint
+npm run build
+~~~
+
+## 🗂️ Структура репозитория
+
+~~~text
+account-service/       аккаунты и владельцы аккаунтов
+bill-service/          счета, баланс, outbox и sandbox-пополнения
+deposit-service/       история депозитов
+notification-service/  email-уведомления
+gateway-service/       внешний API Gateway
+config-service/        централизованная конфигурация
+discovery-service/     Eureka Server
+security-lib/          общая JWT-конфигурация и роли
+common-lib/            DTO, исключения и RabbitMQ topology
+common-test-lib/       общая тестовая инфраструктура
+frontend/              React-клиент
+keycloak/import/       realm и demo-пользователи
+postgres/init/         создание баз и ролей PostgreSQL
+postman/               заготовки для Postman
+~~~
 
 ## 🔮 Планы по развитию (Roadmap)
+- ~~Security: JWT авторизация, OAuth2 Resource Server~~
+- Caching: Redis для кеширования
+- Orchestration: Kubernetes (K8s) + Helm Charts  
+- Messaging: DLQ / Outbox / idempotency для RabbitMQ-сценариев
+- Observability: ELK Stack или Prometheus + Grafana
+- Saga Pattern: Распределенные транзакции
 
-~~* **Security**: JWT авторизация, OAuth2 Resource Server~~
-* **Caching**: Redis для кеширования
-* **Orchestration**: Kubernetes (K8s) + Helm Charts
-* **Messaging**: DLQ / Outbox / idempotency для RabbitMQ-сценариев
-* **Observability**: ELK Stack или Prometheus + Grafana
-* **Saga Pattern**: Распределенные транзакции
+## ⚠️ Известные ограничения
 
----
+- проект предназначен для учебного и локального использования;
+- demo-пароли нельзя использовать в production;
+- email требует доступного SMTP-сервера и корректного app password;
+- внешняя публикация сервисов напрямую, обходя Gateway, не является целевым сценарием;
+- удаление аккаунта и счетов реализовано через внутренние события.
 
 ## 👨‍💻 Автор
 
 Разработчик: KirillShilets
-
-Проект создан в образовательных целях для демонстрации навыков работы с микросервисной архитектурой на Spring Boot.

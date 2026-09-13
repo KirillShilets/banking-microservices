@@ -2,16 +2,21 @@ package org.bank.bill.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.bank.bill.controller.dto.request.SandboxDepositRequest;
 import org.bank.bill.service.BillService;
 import org.bank.dto.request.BillRequestDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
-import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
@@ -20,7 +25,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/bills")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('customer','employee','admin')")
+@PreAuthorize("hasAnyRole('customer', 'employee', 'admin')")
 public class BillController {
 
     private final BillService billService;
@@ -32,48 +37,47 @@ public class BillController {
 
     @GetMapping("/accounts/{accountId}")
     public ResponseEntity<List<BillResponseDTO>> getBillsByAccountId(@PathVariable Long accountId) {
-        return ResponseEntity.ok(billService.getBillsByAccountId(accountId));
+        return ResponseEntity.ok(
+                billService.getBillsByAccountId(accountId)
+        );
     }
 
     @PostMapping
-    public ResponseEntity<Long> createBill(@Valid @RequestBody BillRequestDTO dto) {
-        Long billId = billService.createBill(dto.accountId(), dto.amount(), dto.overdraftEnabled());
+    public ResponseEntity<Long> createBill(@Valid @RequestBody BillRequestDTO request) {
+        Long billId = billService.createBill(
+                request.accountId(),
+                request.amount(),
+                request.overdraftEnabled()
+        );
+
         URI location = ServletUriComponentsBuilder
                 .fromCurrentRequestUri()
                 .path("/{id}")
                 .buildAndExpand(billId)
                 .toUri();
+
         return ResponseEntity.created(location).body(billId);
     }
 
     @PostMapping("/accounts/{accountId}")
-    public ResponseEntity<List<Long>> createBillsForAccount(@PathVariable Long accountId,
-                                                            @Valid @RequestBody List<CreateBillRequestDTO> bills) {
+    public ResponseEntity<List<Long>> createBillsForAccount(@PathVariable Long accountId, @RequestBody List<CreateBillRequestDTO> bills) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(billService.createBillsForAccount(accountId, bills));
+                .body(
+                        billService.createBillsForAccount(
+                                accountId,
+                                bills
+                        )
+                );
     }
 
-    @PutMapping("/{billId}")
-    public ResponseEntity<BillResponseDTO> updateBill(@PathVariable Long billId,
-                                                      @Valid @RequestBody BillRequestDTO dto) {
-        return ResponseEntity.ok(billService.updateBill(billId, dto.accountId(), dto.amount(), dto.overdraftEnabled()));
-    }
-
-    @PostMapping("/deposits")
-    public ResponseEntity<BillDepositResponseDTO> depositBill(@Valid @RequestBody DepositRequestDTO dto) {
-        return ResponseEntity.ok(billService.depositBill(dto.billId(), dto.amount(), dto.email()));
-    }
-
-    @DeleteMapping("/{billId}")
-    public ResponseEntity<Void> deleteBill(@PathVariable Long billId) {
-        billService.deleteBill(billId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @DeleteMapping("/accounts/{accountId}")
-    @PreAuthorize("hasRole('admin')")
-    public ResponseEntity<Void> deleteBillsByAccountId(@PathVariable Long accountId) {
-        billService.deleteBillsByAccountId(accountId);
-        return ResponseEntity.noContent().build();
+    @PostMapping("/sandbox/deposits")
+    @PreAuthorize("hasAnyRole('employee', 'admin')")
+    public ResponseEntity<BillDepositResponseDTO> depositBill(@Valid @RequestBody SandboxDepositRequest request) {
+        return ResponseEntity.ok(
+                billService.depositBill(
+                        request.billId(),
+                        request.amount()
+                )
+        );
     }
 }

@@ -1,22 +1,57 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+import App from './App'
 import { initAuth } from './auth/auth-init'
+import {
+    AuthenticationErrorScreen,
+    AuthenticationLoadingScreen,
+} from './auth/AuthScreens'
+import './index.css'
 
-async function bootstrap() {
-    const authenticated = await initAuth()
+const rootElement = document.getElementById('root')
 
-    if (!authenticated) {
-        window.location.reload()
-        return
-    }
+if (!rootElement) {
+    throw new Error('Application root element was not found')
+}
 
-    createRoot(document.getElementById('root')!).render(
+const root = createRoot(rootElement)
+
+function retryAuthentication(): void {
+    window.location.reload()
+}
+
+function renderAuthenticationError(): void {
+    root.render(
         <StrictMode>
-            <App />
+            <AuthenticationErrorScreen onRetry={retryAuthentication} />
         </StrictMode>,
     )
 }
 
-bootstrap()
+async function bootstrap(): Promise<void> {
+    root.render(
+        <StrictMode>
+            <AuthenticationLoadingScreen />
+        </StrictMode>,
+    )
+
+    try {
+        const authenticated = await initAuth()
+
+        if (!authenticated) {
+            renderAuthenticationError()
+            return
+        }
+
+        root.render(
+            <StrictMode>
+                <App />
+            </StrictMode>,
+        )
+    } catch {
+        console.error('Authentication initialization failed')
+        renderAuthenticationError()
+    }
+}
+
+void bootstrap()

@@ -46,7 +46,7 @@ class DepositServiceUnitTest {
 
         when(depositRepository.save(any(Deposit.class))).thenReturn(savedDeposit);
 
-        DepositResponseDTO result = depositService.saveDeposit(BILL_ID, AMOUNT, EMAIL);
+        DepositResponseDTO result = depositService.saveDeposit(BILL_ID, AMOUNT, EMAIL, java.util.UUID.randomUUID());
         assertNotNull(result);
         assertEquals(BILL_ID, result.billId());
         assertEquals(AMOUNT, result.amount());

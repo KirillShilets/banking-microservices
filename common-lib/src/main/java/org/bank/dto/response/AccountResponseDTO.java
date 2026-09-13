@@ -11,4 +11,8 @@ public record AccountResponseDTO(
         String phone,
         @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ssXXX")
         OffsetDateTime creationDate
-) {}
+) {
+    public AccountResponseDTO(String name, String email, String phone, OffsetDateTime creationDate) {
+        this(null, name, email, phone, creationDate);
+    }
+}
