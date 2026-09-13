@@ -4,8 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -34,11 +33,15 @@ public class Account {
     @Column(name = "owner_subject", nullable = false, unique = true, length = 36)
     private String ownerSubject;
 
-    public Account(String name, String email, String phone, String ownerSubject, OffsetDateTime creationDate) {
+    public Account(String ownerSubject, String name, String email, String phone, OffsetDateTime creationDate) {
         this.name = name;
         this.email = email;
         this.phone = phone;
         this.ownerSubject = ownerSubject;
         this.creationDate = creationDate;
+    }
+
+    public Account(String name, String email, String phone, OffsetDateTime creationDate) {
+        this(UUID.randomUUID().toString(), name, email, phone, creationDate);
     }
 }

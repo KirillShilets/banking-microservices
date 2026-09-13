@@ -1,371 +1,57 @@
-# Bill Service
+# 💳 Bill Service
 
-**Bill Service** — микросервис, отвечающий за управление банковскими счетами (bills).
-Он предоставляет REST-API для CRUD-операций над счетами, выполняет операции депозита, публикует доменные события и интегрируется с `account-service`, `deposit-service` и `notification-service` через RabbitMQ и Spring Events.
+Сервис банковских счетов. Хранит счета клиентов, проверяет права доступа, выполняет sandbox-пополнение и публикует команды для записи депозита и отправки уведомления.
 
----
+## ✨ Функции
 
-## 🚀 Основной функционал
+- создание одного или нескольких счетов;
+- назначение default-счета;
+- получение счета и списка счетов аккаунта;
+- проверка владельца, сотрудника и администратора;
+- пополнение с блокировкой строки и проверкой минимальной суммы;
+- outbox и идемпотентная обработка сообщений;
+- Liquibase-миграции PostgreSQL.
 
-* Создание одного или нескольких биллов для аккаунта
-* Получение билла по ID и списка по accountId
-* Обновление данных билла
-* Депозит средств на счёт с многоуровневой валидацией
-* Удаление билла или всех биллов аккаунта
-* Генерация событий:
+## 📡 HTTP API
 
-    * `DepositEvent` → Deposit Service
-    * `NotificationEvent` → Notification Service
-* Проверка email владельца билла через Account Service
-* Асинхронная обработка событий
-* Валидация DTO
-* Поддержка overdraft-режима
+Внешний URL: http://localhost:8989.
 
----
+| Метод | URL | Описание |
+|---|---|---|
+| GET | /bills/{billId} | получить счет |
+| GET | /bills/accounts/{accountId} | получить счета аккаунта |
+| POST | /bills | создать счет |
+| POST | /bills/accounts/{accountId} | создать несколько счетов |
+| POST | /bills/sandbox/deposits | sandbox-пополнение |
 
-## 🧩 Архитектура
+Sandbox-пополнение доступно только ролям employee и admin и только при SANDBOX_DEPOSITS_ENABLED=true. Минимальная сумма задается DEPOSIT_MIN_AMOUNT.
 
-### Слои
+Пример:
 
-* **Controller** — REST API и внешняя валидация (`BillController`)
-* **Service** — бизнес-логика (`BillServiceImpl`)
-* **Repository** — доступ к данным через Spring Data JPA
-* **Entity** — JPA-модель таблицы `bills`
-* **Event Handler** — обработка событий:
-
-    * `DepositEvent` → отправка в Deposit Service
-    * `NotificationEvent` → отправка в Notification Service
-* **Integration**:
-    * RabbitMQ gateways/listeners:
-        * `AccountQueryGateway` (RPC)
-        * `DepositCommandGateway`
-        * `NotificationCommandGateway`
-        * `BillAccountCommandListener`
-    * Spring Events
-    * Async
-    * Spring Retry
-* **Liquibase** — миграции схемы БД
-
----
-
-## 📦 Конфигурация
-
-Сервис использует:
-
-* Spring Cloud Config
-* PostgreSQL
-* RabbitMQ (AMQP)
-* Spring Events + @Async + @TransactionalEventListener
-* Retry-логика для внешних вызовов
-* Liquibase
-
-Фрагмент `application.yml`:
-
-```yaml
-spring:
-  application:
-    name: bill-service
-  config:
-    import: "configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001"
-  cloud:
-    config:
-      fail-fast: true
-```
-
----
-
-## 🗄 Liquibase миграции
-
-Основные файлы:
-
-```
-db/changelog/changes/001-create-bills-table.xml
-db/changelog/changes/002-add-unique-default-bill-index.xml
-db/changelog/db.changelog-master.xml
-```
-
-Пример миграции:
-
-```xml
-<createTable tableName="bills">
-    <column name="bill_id" type="BIGSERIAL">
-        <constraints primaryKey="true" nullable="false"/>
-    </column>
-
-    <column name="account_id" type="BIGINT"/>
-    <column name="amount" type="NUMERIC(19,2)"/>
-    <column name="is_default" type="BOOLEAN"/>
-    <column name="creation_date" type="TIMESTAMPTZ"/>
-    <column name="overdraft_enabled" type="BOOLEAN"/>
-</createTable>
-
-<createIndex tableName="bills" indexName="idx_default_bill_unique" unique="true">
-    <column name="account_id"/>
-    <column name="is_default"/>
-</createIndex>
-```
-
----
-
-## 📘 REST API
-
-### 🔹 Получить билл
-
-```
-GET /bills/{billId}
-```
-
-Response:
-
-```json
+~~~json
 {
   "billId": 1,
-  "accountId": 10,
-  "amount": 100.00,
-  "isDefault": true,
-  "creationDate": "2025-12-12T12:00:00Z",
-  "overdraftEnabled": true
+  "amount": 25.00
 }
-```
+~~~
 
----
+## 💰 Сценарий пополнения
 
-### 🔹 Получить все биллы аккаунта
+В одной транзакции сервис проверяет счет, владельца и сумму, увеличивает баланс и создает две outbox-команды: для deposit-service и notification-service. Команды передаются через RabbitMQ после фиксации транзакции.
 
-```
-GET /bills/accounts/{accountId}
-```
+## ⚙️ Конфигурация
 
----
+- порт: 8082;
+- база: bill_service_database;
+- DEPOSIT_MIN_AMOUNT по умолчанию 2.60 в конфигурации сервиса;
+- SANDBOX_DEPOSITS_ENABLED по умолчанию false;
+- discovery: Eureka;
+- messaging: RabbitMQ.
 
-### 🔹 Создать один билл
+## 🧪 Тесты
 
-```
-POST /bills
-```
+~~~powershell
+.\gradlew.bat :bill-service:test
+~~~
 
-Request:
-
-```json
-{
-  "accountId": 10,
-  "amount": 150.00,
-  "overdraftEnabled": true
-}
-```
-
----
-
-### 🔹 Создать несколько биллов для аккаунта
-
-```
-POST /bills/accounts/{accountId}
-```
-
-Request:
-
-```json
-[
-  { "amount": 100.00, "overdraftEnabled": true },
-  { "amount": 200.00, "overdraftEnabled": false }
-]
-```
-
----
-
-### 🔹 Обновить билл
-
-```
-PUT /bills/{billId}
-```
-
----
-
-### 🔹 Депозит на билл
-
-```
-POST /bills/deposits
-```
-
-Request:
-
-```json
-{
-  "billId": 1,
-  "amount": 50.00,
-  "email": "test@test.com"
-}
-```
-
-На уровне сервиса выполняется:
-
-* валидация минимальной суммы (`app.deposit.min-amount`)
-* проверка email через Account Service (RabbitMQ RPC)
-* обновление баланса
-* публикация двух событий:
-
-    * `NotificationEvent`
-    * `DepositEvent`
-
----
-
-### 🔹 Удалить билл
-
-```
-DELETE /bills/{billId}
-```
-
-### 🔹 Удалить все биллы аккаунта
-
-```
-DELETE /bills/accounts/{accountId}
-```
-
----
-
-## 🔔 Доменные события
-
-### DepositEvent
-
-```java
-new DepositEvent(billId, amount, email)
-```
-
-Обрабатывается асинхронно
-→ отправляет команду в RabbitMQ (`deposit.save`).
-
----
-
-### NotificationEvent
-
-Отправляется при успешном депозите:
-
-```java
-new NotificationEvent(email, amount, billId)
-```
-
-Обрабатывается → отправляет команду в RabbitMQ (`notification.deposit`).
-
----
-
-## 🧪 Тестирование
-
-### ✔ Unit-тесты:
-
-* `BillControllerUnitTest`
-* Мок внешних клиентов
-* Проверка валидации, ошибок, HTTP-кодов
-
-### ✔ Интеграционные тесты:
-
-* Полный контекст Spring
-* Подключение реальной БД PostgreSQL
-* Liquibase миграции
-* Проверка CRUD операций
-* Mock RabbitMQ gateways:
-
-    * `AccountQueryGateway`
-    * `DepositCommandGateway`
-    * `NotificationCommandGateway`
-* Проверка обработки событий
-
----
-
-## 🧱 Структура проекта
-
-```
-bill-service
- ├── controller
- │    └── BillController.java
- ├── service
- │    ├── BillService.java
- │    └── BillServiceImpl.java
- ├── handler
- │    └── event/*.java
- ├── repository
- ├── entity
- │    └── Bill.java
- ├── integration
- │    └── clients/*.java
- ├── liquibase
- ├── dto
- ├── test
- └── BillApplication.java
-```
-
----
-
-## 🔧 Запуск
-
-### 1. Собрать:
-
-```
-mvn clean install
-```
-
-### 2. Запустить:
-
-```
-java -jar bill-service.jar
-```
-
-При старте сервис применяет Liquibase-миграции, подтягивает конфигурацию из Config Server и регистрируется в Eureka (если используется).
-
----
-
-## 📡 Взаимодействие с другими сервисами
-
-### Account Service
-
-Используется для:
-
-* проверки существования аккаунта
-* валидации email при депозите
-* взаимодействие реализовано через RabbitMQ RPC (`account.query`)
-
-### Deposit Service
-
-Создание записи о депозите после изменения баланса.
-Команда отправляется через RabbitMQ (`deposit.save`).
-
-### Notification Service
-
-Отправка email-уведомления пользователю.
-Команда отправляется через RabbitMQ (`notification.deposit`).
-
-Обработка сообщений выполняется асинхронно, retry регулируется Rabbit listener конфигурацией.
-
----
-
-## 📜 Ошибки и обработка
-
-Ошибки перехватываются `GlobalExceptionHandler`:
-
-* `404 Not Found` — билл не найден
-* `400 Bad Request` — ошибка валидации
-* `409 Conflict` — нарушение ограничений (например, уникальный default-билл)
-
-Пример ошибки:
-
-```json
-{
-  "message": "Bill with id: 5 not found",
-  "timestamp": "2025-01-10T13:12:00Z"
-}
-```
-
----
-
-## 🧰 Используемые технологии
-
-* Java 17
-* Spring Boot 3.5.6
-* Spring Cloud (Config)
-* RabbitMQ (AMQP)
-* PostgreSQL
-* Liquibase
-* JPA / Hibernate
-* Mockito / Spring Test
-* Lombok
-
----
+Проверяются права доступа, валидация денег, пополнение, outbox, idempotency и сценарии удаления счетов.

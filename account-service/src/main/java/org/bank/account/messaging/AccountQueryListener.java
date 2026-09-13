@@ -25,7 +25,7 @@ public class AccountQueryListener {
         }
 
         try {
-            return AccountLookupResponseDTO.success(accountService.getAccount(request.accountId()));
+            return AccountLookupResponseDTO.success(accountService.getAccountForInternalUse(request.accountId()));
         } catch (NotFoundException ex) {
             return AccountLookupResponseDTO.failure(HttpStatus.NOT_FOUND, ex.getMessage());
         } catch (RuntimeException ex) {

@@ -3,23 +3,51 @@
   overdraftEnabled: boolean
 }
 
-export function parsePositiveId(value: string, fieldName: string): number {
-  const id = Number(value)
+export function parsePositiveId(
+    value: string,
+    fieldName: string,
+): number {
+  const normalized = value.trim()
 
-  if (!Number.isInteger(id) || id <= 0) {
-    throw new Error(`${fieldName}: укажите корректный положительный ID.`)
+  if (!/^[0-9]+$/.test(normalized)) {
+    throw new Error(`${fieldName}: укажите положительный целый ID.`)
+  }
+
+  const id = Number(normalized)
+
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error(
+        `${fieldName}: ID выходит за допустимый диапазон.`,
+    )
   }
 
   return id
 }
 
-export function parseAmount(value: string, fieldName: string): number {
-  const normalizedValue = value.trim().replace(',', '.')
-  const amount = Number(normalizedValue)
+export function parseAmount(
+    value: string,
+    fieldName: string,
+): string {
+  const normalized = value.trim().replace(',', '.')
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error(`${fieldName}: сумма должна быть больше 0.`)
+  if (!/^[0-9]+(?:\.[0-9]{1,2})?$/.test(normalized)) {
+    throw new Error(
+        `${fieldName}: укажите положительную сумму `
+        + 'не более чем с двумя знаками после точки.',
+    )
   }
 
-  return Number(amount.toFixed(2))
+  const [rawInteger, rawFraction = ''] = normalized.split('.')
+  const integer = rawInteger.replace(/^0+(?=\d)/, '')
+  const fraction = rawFraction.padEnd(2, '0')
+
+  if (integer.length > 17) {
+    throw new Error(`${fieldName}: сумма слишком большая.`)
+  }
+
+  if (integer === '0' && fraction === '00') {
+    throw new Error(`${fieldName}: сумма должна быть больше нуля.`)
+  }
+
+  return `${integer}.${fraction}`
 }

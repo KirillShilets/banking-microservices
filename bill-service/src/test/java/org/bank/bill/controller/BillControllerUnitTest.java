@@ -4,9 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bank.bill.service.BillService;
 import org.bank.dto.request.BillRequestDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
-import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
+import org.bank.bill.controller.dto.request.SandboxDepositRequest;
 import org.bank.exception.BadRequestException;
 import org.bank.exception.NotFoundException;
 import org.bank.exception.handler.GlobalExceptionHandler;
@@ -97,91 +97,173 @@ class BillControllerUnitTest {
     }
 
     @Test
-    @DisplayName("Should create bill and return Location header")
+    @DisplayName("Should open a zero-balance bill and return Location header")
     void createBill_success() throws Exception {
-        BillRequestDTO dto = new BillRequestDTO(ACCOUNT_ID, AMOUNT_100, true);
-        when(billService.createBill(dto.accountId(), dto.amount(), dto.overdraftEnabled())).thenReturn(BILL_ID);
+        BillRequestDTO request = new BillRequestDTO(
+                ACCOUNT_ID,
+                BigDecimal.ZERO,
+                false
+        );
+
+        when(billService.createBill(
+                request.accountId(),
+                request.amount(),
+                request.overdraftEnabled()
+        )).thenReturn(BILL_ID);
 
         mockMvc.perform(post("/bills")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$").value(BILL_ID))
-                .andExpect(header().string("Location", matchesPattern(".*/bills/" + BILL_ID + "$")));
+                .andExpect(header().string(
+                        "Location",
+                        matchesPattern(".*/bills/" + BILL_ID + "$")
+                ));
 
-        verify(billService).createBill(dto.accountId(), dto.amount(), dto.overdraftEnabled());
+        verify(billService).createBill(
+                ACCOUNT_ID,
+                BigDecimal.ZERO,
+                false
+        );
     }
 
     @Test
-    @DisplayName("Should create multiple bills for account")
+    @DisplayName("Should open multiple zero-balance bills for an account")
     void createBillsForAccount_success() throws Exception {
-        List<CreateBillRequestDTO> bills = List.of(new CreateBillRequestDTO(AMOUNT_100, true));
-        when(billService.createBillsForAccount(eq(ACCOUNT_ID), anyList())).thenReturn(List.of(BILL_ID));
+        List<CreateBillRequestDTO> requests = List.of(
+                new CreateBillRequestDTO(BigDecimal.ZERO, false),
+                new CreateBillRequestDTO(BigDecimal.ZERO, false)
+        );
+
+        List<Long> createdIds = List.of(BILL_ID, 2L);
+
+        when(billService.createBillsForAccount(
+                ACCOUNT_ID,
+                requests
+        )).thenReturn(createdIds);
 
         mockMvc.perform(post("/bills/accounts/{accountId}", ACCOUNT_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(bills)))
+                        .content(objectMapper.writeValueAsString(requests)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0]").value(BILL_ID));
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0]").value(BILL_ID))
+                .andExpect(jsonPath("$[1]").value(2));
 
-        verify(billService).createBillsForAccount(eq(ACCOUNT_ID), anyList());
+        verify(billService).createBillsForAccount(
+                ACCOUNT_ID,
+                requests
+        );
     }
 
     @Test
-    @DisplayName("Should update bill and return updated details")
-    void updateBill_success() throws Exception {
-        BillRequestDTO dto = new BillRequestDTO(ACCOUNT_ID, AMOUNT_100, true);
-        BillResponseDTO updated = new BillResponseDTO(BILL_ID, ACCOUNT_ID, AMOUNT_100, true, DEFAULT_TIME, true);
+    @DisplayName("Should reject a non-zero initial balance before calling service")
+    void createBill_nonZeroInitialBalance_rejected() throws Exception {
+        BillRequestDTO request = new BillRequestDTO(
+                ACCOUNT_ID,
+                new BigDecimal("100.00"),
+                false
+        );
 
-        when(billService.updateBill(BILL_ID, dto.accountId(), dto.amount(), dto.overdraftEnabled())).thenReturn(updated);
+        mockMvc.perform(post("/bills")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
 
+        verifyNoInteractions(billService);
+    }
+
+    @Test
+    @DisplayName("Should reject self-assigned overdraft before calling service")
+    void createBill_overdraftEnabled_rejected() throws Exception {
+        BillRequestDTO request = new BillRequestDTO(
+                ACCOUNT_ID,
+                BigDecimal.ZERO,
+                true
+        );
+
+        mockMvc.perform(post("/bills")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+        verifyNoInteractions(billService);
+    }
+
+    @Test
+    @DisplayName("PUT is not supported for a bill")
+    void updateBill_methodNotAllowed() throws Exception {
         mockMvc.perform(put("/bills/{id}", BILL_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.amount").value(100.00));
+                        .content("""
+                            {
+                                "accountId": 999,
+                                "amount": 1000000.00,
+                                "overdraftEnabled": true
+                            }
+                            """))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().exists("Allow"))
+                .andExpect(jsonPath("$.status").value(405));
 
-        verify(billService).updateBill(BILL_ID, dto.accountId(), dto.amount(), dto.overdraftEnabled());
+        verifyNoInteractions(billService);
     }
 
     @Test
     @DisplayName("Should deposit to bill and return new balance")
     void depositBill_success() throws Exception {
-        DepositRequestDTO dto = new DepositRequestDTO(BILL_ID, AMOUNT_100, EMAIL);
-        BillDepositResponseDTO response = new BillDepositResponseDTO(BILL_ID, ACCOUNT_ID, AMOUNT_200, EMAIL, true, true, DEFAULT_TIME);
+        SandboxDepositRequest request =
+                new SandboxDepositRequest(BILL_ID, AMOUNT_100);
 
-        when(billService.depositBill(dto.billId(), dto.amount(), dto.email())).thenReturn(response);
+        BillDepositResponseDTO response =
+                new BillDepositResponseDTO(
+                        BILL_ID,
+                        ACCOUNT_ID,
+                        AMOUNT_200,
+                        EMAIL,
+                        true,
+                        true,
+                        DEFAULT_TIME
+                );
 
-        mockMvc.perform(post("/bills/deposits")
+        when(billService.depositBill(
+                request.billId(),
+                request.amount()
+        )).thenReturn(response);
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.amount").value(200.00));
 
-        verify(billService).depositBill(dto.billId(), dto.amount(), dto.email());
+        verify(billService).depositBill(
+                request.billId(),
+                request.amount()
+        );
     }
 
     @Test
-    @DisplayName("Should delete bill and return No Content")
-    void deleteBill_success() throws Exception {
-        doNothing().when(billService).deleteBill(BILL_ID);
+    @DisplayName("Should return 400 Bad Request when deposit logic fails")
+    void depositBill_badRequest() throws Exception {
+        SandboxDepositRequest request =
+                new SandboxDepositRequest(BILL_ID, AMOUNT_100);
 
-        mockMvc.perform(delete("/bills/{id}", BILL_ID))
-                .andExpect(status().isNoContent());
+        when(billService.depositBill(
+                request.billId(),
+                request.amount()
+        )).thenThrow(new BadRequestException("Deposit too small"));
 
-        verify(billService).deleteBill(BILL_ID);
-    }
-
-    @Test
-    @DisplayName("Should delete all bills for account and return No Content")
-    void deleteBillsByAccountId_success() throws Exception {
-        doNothing().when(billService).deleteBillsByAccountId(ACCOUNT_ID);
-
-        mockMvc.perform(delete("/bills/accounts/{accountId}", ACCOUNT_ID))
-                .andExpect(status().isNoContent());
-
-        verify(billService).deleteBillsByAccountId(ACCOUNT_ID);
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Deposit too small"))
+                .andExpect(jsonPath("$.timestamp")
+                        .value(matchesPattern("^\\d{4}-\\d{2}-\\d{2}T.*")));
     }
 
     @Test
@@ -190,33 +272,6 @@ class BillControllerUnitTest {
         when(billService.getBill(NON_EXISTENT_ID)).thenThrow(new NotFoundException("Bill not found"));
 
         mockMvc.perform(get("/bills/{id}", NON_EXISTENT_ID))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value("Bill not found"))
-                .andExpect(jsonPath("$.timestamp").value(matchesPattern("^\\d{4}-\\d{2}-\\d{2}T.*")));
-    }
-
-    @Test
-    @DisplayName("Should return 400 Bad Request when deposit logic fails")
-    void depositBill_badRequest() throws Exception {
-        DepositRequestDTO dto = new DepositRequestDTO(BILL_ID, AMOUNT_100, EMAIL);
-
-        when(billService.depositBill(dto.billId(), dto.amount(), dto.email()))
-                .thenThrow(new BadRequestException("Deposit too small"));
-
-        mockMvc.perform(post("/bills/deposits")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Deposit too small"))
-                .andExpect(jsonPath("$.timestamp").value(matchesPattern("^\\d{4}-\\d{2}-\\d{2}T.*")));
-    }
-
-    @Test
-    @DisplayName("Should return 404 Not Found when deleting non-existent bill")
-    void deleteBill_notFound() throws Exception {
-        doThrow(new NotFoundException("Bill not found")).when(billService).deleteBill(NON_EXISTENT_ID);
-
-        mockMvc.perform(delete("/bills/{id}", NON_EXISTENT_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Bill not found"))
                 .andExpect(jsonPath("$.timestamp").value(matchesPattern("^\\d{4}-\\d{2}-\\d{2}T.*")));

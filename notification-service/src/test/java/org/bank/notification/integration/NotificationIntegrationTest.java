@@ -1,103 +1,103 @@
 package org.bank.notification.integration;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bank.dto.request.DepositRequestDTO;
-import org.junit.jupiter.api.DisplayName;
+import org.bank.exception.NotificationSendException;
+import org.bank.notification.repository.NotificationDeliveryRepository;
+import org.bank.notification.service.NotificationService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
-import java.util.Objects;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@TestPropertySource(properties = "spring.mail.username=bank-robot@test.com")
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = "spring.mail.username=bank-robot@example.test"
+)
 class NotificationIntegrationTest {
 
-    private static final Long BILL_ID = 1L;
-    private static final BigDecimal AMOUNT = new BigDecimal("100.00");
-    private static final String CLIENT_EMAIL = "client@test.com";
-    private static final String SENDER_EMAIL = "bank-robot@test.com";
+    @Autowired
+    private NotificationService service;
 
     @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    private NotificationDeliveryRepository repository;
 
     @MockitoBean
-    private JavaMailSender javaMailSender;
+    private JavaMailSender mailSender;
 
-    @Test
-    @DisplayName("Should process request, form email message and call MailSender")
-    void sendDepositNotification_success() throws Exception {
-        DepositRequestDTO requestDTO = new DepositRequestDTO(BILL_ID, AMOUNT, CLIENT_EMAIL);
+    @AfterEach
+    void clear() {
+        repository.deleteAll();
+    }
 
-        mockMvc.perform(post("/notifications/deposits")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestDTO)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(CLIENT_EMAIL))
-                .andExpect(jsonPath("$.message").value("Notification sent successfully"));
-
-        ArgumentCaptor<SimpleMailMessage> messageCaptor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(javaMailSender, timeout(1000)).send(messageCaptor.capture());
-
-        SimpleMailMessage sentMessage = messageCaptor.getValue();
-
-        assertThat(sentMessage.getFrom()).isEqualTo(SENDER_EMAIL);
-        assertThat(Objects.requireNonNull(sentMessage.getTo())[0]).isEqualTo(CLIENT_EMAIL);
-        assertThat(sentMessage.getSubject()).isEqualTo("Deposit Notification");
-        assertThat(sentMessage.getText()).contains(AMOUNT.toString());
+    private DepositRequestDTO request(UUID id) {
+        return new DepositRequestDTO(
+                1L,
+                new BigDecimal("100.00"),
+                "customer@example.test",
+                id
+        );
     }
 
     @Test
-    @DisplayName("Should return 500 Internal Server Error when MailSender fails")
-    void sendDepositNotification_mailServerFailure() throws Exception {
-        DepositRequestDTO requestDTO = new DepositRequestDTO(BILL_ID, AMOUNT, CLIENT_EMAIL);
+    void successfulSendPersistsMarker() {
+        UUID id = UUID.randomUUID();
 
-        doThrow(new MailSendException("SMTP connection timeout"))
-                .when(javaMailSender).send(any(SimpleMailMessage.class));
+        service.sendDepositNotification(request(id));
 
-        mockMvc.perform(post("/notifications/deposits")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestDTO)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.message", containsString("Failed to send deposit notification")));
+        verify(mailSender).send(any(SimpleMailMessage.class));
+        assertThat(repository.existsById(id)).isTrue();
     }
 
     @Test
-    @DisplayName("Should return 400 Bad Request on invalid input")
-    void sendDepositNotification_invalidInput() throws Exception {
-        String invalidJson = """
-            {
-                "amount": "100.00",
-                "email": "" 
-            }
-        """;
+    void sequentialDuplicateIsSkipped() {
+        UUID id = UUID.randomUUID();
+        DepositRequestDTO request = request(id);
 
-        mockMvc.perform(post("/notifications/deposits")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidJson))
-                .andExpect(status().isBadRequest());
+        service.sendDepositNotification(request);
+        service.sendDepositNotification(request);
 
-        verify(javaMailSender, never()).send(any(SimpleMailMessage.class));
+        verify(mailSender, times(1))
+                .send(any(SimpleMailMessage.class));
+
+        assertThat(repository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void smtpFailureDoesNotPersistMarker() {
+        UUID id = UUID.randomUUID();
+
+        doThrow(new MailSendException("Test SMTP failure"))
+                .when(mailSender)
+                .send(any(SimpleMailMessage.class));
+
+        assertThrows(
+                NotificationSendException.class,
+                () -> service.sendDepositNotification(request(id))
+        );
+
+        assertThat(repository.existsById(id)).isFalse();
+    }
+
+    @Test
+    void missingMessageIdIsRejected() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.sendDepositNotification(request(null))
+        );
+
+        verifyNoInteractions(mailSender);
+        assertThat(repository.count()).isZero();
     }
 }

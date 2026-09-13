@@ -21,6 +21,10 @@ public class Bill {
     @Column(name = "bill_id")
     private Long billId;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @NotNull
     @Column(name = "account_id", nullable = false)
     private Long accountId;

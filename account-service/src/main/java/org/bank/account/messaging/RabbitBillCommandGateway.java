@@ -24,13 +24,4 @@ public class RabbitBillCommandGateway implements BillCommandGateway {
                 new CreateBillsCommandDTO(accountId, bills)
         );
     }
-
-    @Override
-    public void deleteBillsByAccountId(Long accountId) {
-        rabbitTemplate.convertAndSend(
-                RabbitTopology.INTERNAL_EXCHANGE,
-                RabbitTopology.BILL_DELETE_BY_ACCOUNT_ROUTING_KEY,
-                new DeleteBillsByAccountCommandDTO(accountId)
-        );
-    }
 }

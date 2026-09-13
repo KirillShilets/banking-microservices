@@ -46,7 +46,7 @@ class AccountIntegrationTest {
     private static final String NAME = "name";
     private static final String EMAIL = "test@test.com";
     private static final String PHONE = "+375290000000";
-    private static final BigDecimal AMOUNT = new BigDecimal("100.00");
+    private static final BigDecimal AMOUNT = BigDecimal.ZERO;
     private static final OffsetDateTime DEFAULT_TIME = OffsetDateTime.parse("2025-12-12T12:00:00Z");
     private static final String OWNER_SUB = "11111111-1111-1111-1111-111111111111";
 
@@ -78,27 +78,63 @@ class AccountIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should create account, persist it and trigger bill creation event")
+    @DisplayName("Unauthenticated request cannot delete an account")
+    void deleteAccount_noJwt_unauthorized() throws Exception {
+        Account saved = accountRepository.save(
+                new Account(
+                        OWNER_SUB,
+                        NAME,
+                        EMAIL,
+                        PHONE,
+                        DEFAULT_TIME
+                )
+        );
+
+        mockMvc.perform(delete("/accounts/{accountId}", saved.getAccountId()))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(accountRepository.existsById(saved.getAccountId())).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should create account and request zero-balance bill opening")
     void createAccount_success() throws Exception {
-        List<CreateBillRequestDTO> bills = List.of(new CreateBillRequestDTO(AMOUNT, true));
-        AccountRequestDTO dto = new AccountRequestDTO(NAME, EMAIL, PHONE, bills);
+        List<CreateBillRequestDTO> bills = List.of(
+                new CreateBillRequestDTO(BigDecimal.ZERO, false)
+        );
+
+        AccountRequestDTO request = new AccountRequestDTO(
+                NAME,
+                EMAIL,
+                PHONE,
+                bills
+        );
 
         String response = mockMvc.perform(post("/accounts")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$", greaterThan(0)))
-                .andReturn().getResponse().getContentAsString();
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
 
         Long accountId = objectMapper.readValue(response, Long.class);
 
-        Account account = accountRepository.findById(accountId).orElseThrow();
-        assertThat(account.getEmail()).isEqualTo(EMAIL);
-        assertThat(account.getName()).isEqualTo(NAME);
+        Account saved = accountRepository.findById(accountId)
+                .orElseThrow();
 
-        verify(billCommandGateway, timeout(2000)).createBillsForAccount(eq(accountId), anyList());
+        assertThat(saved.getOwnerSubject()).isEqualTo(OWNER_SUB);
+        assertThat(saved.getEmail()).isEqualTo(EMAIL);
+        assertThat(saved.getName()).isEqualTo(NAME);
+
+        verify(billCommandGateway, timeout(5000))
+                .createBillsForAccount(
+                        eq(accountId),
+                        eq(bills)
+                );
     }
 
     @Test
@@ -131,20 +167,6 @@ class AccountIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should delete account from database and trigger bills deletion event")
-    void deleteAccount_success() throws Exception {
-        Account saved = accountRepository.save(new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME));
-
-        mockMvc.perform(delete("/accounts/" + saved.getAccountId())
-                        .with(adminJwt())) // <-- Добавлен JWT
-                .andExpect(status().isNoContent());
-
-        assertThat(accountRepository.findById(saved.getAccountId())).isEmpty();
-
-        verify(billCommandGateway, timeout(2000)).deleteBillsByAccountId(eq(saved.getAccountId()));
-    }
-
-    @Test
     @DisplayName("Should return 404 when getting non-existent account ID")
     void getAccount_notFound() throws Exception {
         mockMvc.perform(get("/accounts/" + NON_EXISTENT_ID)
@@ -154,26 +176,68 @@ class AccountIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should return 404 when deleting non-existent account ID")
-    void deleteAccount_notFound() throws Exception {
-        mockMvc.perform(delete("/accounts/" + NON_EXISTENT_ID)
-                        .with(adminJwt()))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    @DisplayName("Should return 409 Conflict (or appropriate error) when email already exists")
+    @DisplayName("Should reject duplicate email for a different account owner")
     void createAccount_duplicateEmail() throws Exception {
-        accountRepository.save(new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME));
+        String existingOwnerSubject =
+                "22222222-2222-2222-2222-222222222222";
 
-        AccountRequestDTO dto = new AccountRequestDTO("name2", EMAIL, "+143463424324", List.of(new CreateBillRequestDTO(AMOUNT, true)));
+        Account existing = accountRepository.save(
+                new Account(
+                        existingOwnerSubject,
+                        NAME,
+                        EMAIL,
+                        PHONE,
+                        DEFAULT_TIME
+                )
+        );
+
+        long countBeforeRequest = accountRepository.count();
+
+        AccountRequestDTO request = new AccountRequestDTO(
+                "Another Customer",
+                EMAIL,
+                "+375291234568",
+                List.of(
+                        new CreateBillRequestDTO(
+                                BigDecimal.ZERO,
+                                false
+                        )
+                )
+        );
 
         mockMvc.perform(post("/accounts")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", containsString("already exists")));
+                .andExpect(jsonPath("$.status").value(409));
+
+        assertThat(accountRepository.count()).isEqualTo(countBeforeRequest);
+
+        assertThat(accountRepository.findByOwnerSubject(OWNER_SUB))
+                .isEmpty();
+
+        Account unchanged = accountRepository.findById(
+                existing.getAccountId()
+        ).orElseThrow();
+
+        assertThat(unchanged.getOwnerSubject())
+                .isEqualTo(existingOwnerSubject);
+        assertThat(unchanged.getEmail()).isEqualTo(EMAIL);
+    }
+
+    @Test
+    @DisplayName("Account physical deletion is not exposed")
+    void deleteAccount_methodNotAllowed() throws Exception {
+        Account saved = accountRepository.save(
+                new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME)
+        );
+
+        mockMvc.perform(delete("/accounts/{id}", saved.getAccountId())
+                        .with(adminJwt()))
+                .andExpect(status().isMethodNotAllowed());
+
+        assertThat(accountRepository.existsById(saved.getAccountId())).isTrue();
     }
 
     @Test

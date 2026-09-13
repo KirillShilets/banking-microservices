@@ -7,5 +7,8 @@
 
     <include file="db/changelog/changes/001-create-bills-table.xml"/>
     <include file="db/changelog/changes/002-add-unique-default-bill-index.xml"/>
+    <include file="db/changelog/changes/003-create-processed-messages-table.xml"/>
+    <include file="db/changelog/changes/004-create-outbox-table.xml"/>
+    <include file="db/changelog/changes/005-add-bill-version.xml"/>
 
 </databaseChangeLog>

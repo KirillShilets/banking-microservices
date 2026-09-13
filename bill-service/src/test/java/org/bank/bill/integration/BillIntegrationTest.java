@@ -42,9 +42,9 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
 @AutoConfigureMockMvc
 @EnablePostgresTestConfiguration
+@SpringBootTest(properties = "app.sandbox.deposits-enabled=true")
 class BillIntegrationTest {
 
     private static final Long ACCOUNT_ID = 10L;
@@ -108,24 +108,31 @@ class BillIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should create bill and persist it correctly in database")
+    @DisplayName("New bill is persisted with zero balance and without overdraft")
     void createBill_success() throws Exception {
-        BillRequestDTO dto = new BillRequestDTO(ACCOUNT_ID, AMOUNT_100, true);
+        BillRequestDTO request = new BillRequestDTO(
+                ACCOUNT_ID,
+                BigDecimal.ZERO,
+                false
+        );
 
         String response = mockMvc.perform(post("/bills")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
-                .andExpect(jsonPath("$", greaterThan(0)))
-                .andReturn().getResponse().getContentAsString();
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
 
         Long billId = objectMapper.readValue(response, Long.class);
 
-        Bill bill = billRepository.findById(billId).orElseThrow();
-        assertThat(bill.getAccountId()).isEqualTo(ACCOUNT_ID);
-        assertThat(bill.getAmount()).isEqualByComparingTo(AMOUNT_100);
+        Bill saved = billRepository.findById(billId).orElseThrow();
+
+        assertThat(saved.getAccountId()).isEqualTo(ACCOUNT_ID);
+        assertThat(saved.getAmount()).isEqualByComparingTo("0.00");
+        assertThat(saved.getOverdraftEnabled()).isFalse();
     }
 
     @Test
@@ -170,52 +177,135 @@ class BillIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should update bill amount in database via API")
-    void updateBill_success() throws Exception {
-        Bill bill = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, true));
-        BillRequestDTO dto = new BillRequestDTO(ACCOUNT_ID, AMOUNT_200, true);
+    @DisplayName("Even admin cannot use PUT to modify bill financial fields")
+    void updateBill_methodNotAllowed() throws Exception {
+        Bill saved = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
 
-        mockMvc.perform(put("/bills/" + bill.getBillId())
+        BillRequestDTO request = new BillRequestDTO(
+                ACCOUNT_ID + 1,
+                AMOUNT_200,
+                true
+        );
+
+        mockMvc.perform(put("/bills/{billId}", saved.getBillId())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.amount").value(200.00));
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().exists("Allow"))
+                .andExpect(jsonPath("$.status").value(405));
 
-        Bill updatedBill = billRepository.findById(bill.getBillId()).orElseThrow();
-        assertThat(updatedBill.getAmount()).isEqualByComparingTo(AMOUNT_200);
+        Bill actual = billRepository.findById(saved.getBillId())
+                .orElseThrow();
+
+        assertThat(actual.getAccountId()).isEqualTo(ACCOUNT_ID);
+        assertThat(actual.getAmount()).isEqualByComparingTo(AMOUNT_100);
+        assertThat(actual.getOverdraftEnabled()).isFalse();
     }
 
     @Test
-    @DisplayName("Should process deposit, update DB amount and trigger external notifications")
+    @DisplayName("Should process sandbox deposit and update DB amount")
     void depositBill_success() throws Exception {
-        Bill bill = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, false));
-        DepositRequestDTO dto = new DepositRequestDTO(bill.getBillId(), DEPOSIT_AMOUNT_10, EMAIL);
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
 
-        mockMvc.perform(post("/bills/deposits")
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(json))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.amount").value(110.00));
+                .andExpect(jsonPath("$.amount").value(110.00))
+                .andExpect(jsonPath("$.email").value(EMAIL));
 
-        Bill updated = billRepository.findById(bill.getBillId()).orElseThrow();
-        assertThat(updated.getAmount()).isEqualByComparingTo("110.00");
+        Bill updated = billRepository
+                .findById(bill.getBillId())
+                .orElseThrow();
 
-        verify(notificationCommandGateway, timeout(2000)).sendDepositNotification(any());
-        verify(depositCommandGateway, timeout(2000)).saveDeposit(any());
+        assertThat(updated.getAmount())
+                .isEqualByComparingTo("110.00");
     }
 
     @Test
-    @DisplayName("Should delete bill from database")
-    void deleteBill_success() throws Exception {
-        Bill bill = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, true));
+    @DisplayName("Physical bill deletion is not exposed")
+    void deleteBill_methodNotAllowed() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
 
-        mockMvc.perform(delete("/bills/" + bill.getBillId())
+        mockMvc.perform(delete("/bills/{id}", bill.getBillId())
                         .with(adminJwt()))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isMethodNotAllowed());
 
-        assertThat(billRepository.findById(bill.getBillId())).isEmpty();
+        assertThat(billRepository.existsById(bill.getBillId())).isTrue();
+    }
+
+    @Test
+    @DisplayName("Batch bill deletion is not exposed")
+    void deleteBillsByAccount_methodNotAllowed() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
+
+        mockMvc.perform(delete("/bills/accounts/{id}", ACCOUNT_ID)
+                        .with(adminJwt()))
+                .andExpect(status().isMethodNotAllowed());
+
+        assertThat(billRepository.existsById(bill.getBillId())).isTrue();
+    }
+
+    @Test
+    @DisplayName("Sandbox accepts an exact decimal string")
+    void sandboxDeposit_decimalString_success() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
+
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.25"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk());
+
+        Bill actual = billRepository.findById(bill.getBillId()).orElseThrow();
+
+        assertThat(actual.getAmount()).isEqualByComparingTo("110.25");
+    }
+
+    @Test
+    @DisplayName("Customer cannot assign a non-zero opening balance")
+    void createBill_customerNonZeroBalance_rejected() throws Exception {
+        long initialCount = billRepository.count();
+
+        BillRequestDTO request = new BillRequestDTO(
+                ACCOUNT_ID,
+                AMOUNT_100,
+                false
+        );
+
+        mockMvc.perform(post("/bills")
+                        .with(customerJwt(OWNER_SUB))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        assertThat(billRepository.count()).isEqualTo(initialCount);
     }
 
     @Test
@@ -228,62 +318,79 @@ class BillIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should return 404 when deleting non-existent bill ID")
-    void deleteBill_notFound() throws Exception {
-        mockMvc.perform(delete("/bills/" + NON_EXISTENT_ID)
-                        .with(adminJwt()))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    @DisplayName("Should return 400 when deposit amount is less than configured minimum")
+    @DisplayName("Should return 400 when sandbox deposit is below minimum")
     void depositBill_amountTooLow() throws Exception {
-        Bill bill = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, false));
-        DepositRequestDTO dto = new DepositRequestDTO(bill.getBillId(), TINY_AMOUNT, EMAIL);
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
 
-        mockMvc.perform(post("/bills/deposits")
+        String json = """
+            {
+                "billId": %d,
+                "amount": "1.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(json))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("less than minimum")));
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("less than minimum")));
 
-        Bill notUpdated = billRepository.findById(bill.getBillId()).orElseThrow();
-        assertThat(notUpdated.getAmount()).isEqualByComparingTo(AMOUNT_100);
+        Bill unchanged = billRepository
+                .findById(bill.getBillId())
+                .orElseThrow();
 
-        verify(notificationCommandGateway, never()).sendDepositNotification(any());
-        verify(depositCommandGateway, never()).saveDeposit(any());
+        assertThat(unchanged.getAmount())
+                .isEqualByComparingTo(AMOUNT_100);
     }
 
     @Test
-    @DisplayName("Should return 400 when provided email does not match account owner")
-    void depositBill_emailMismatch() throws Exception {
-        Bill bill = billRepository.save(new Bill(ACCOUNT_ID, AMOUNT_100, false));
-        DepositRequestDTO dto = new DepositRequestDTO(bill.getBillId(), DEPOSIT_AMOUNT_10, WRONG_EMAIL);
+    @DisplayName("Sandbox deposit uses email from account profile")
+    void depositBill_usesEmailFromAccountProfile() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
 
-        mockMvc.perform(post("/bills/deposits")
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("does not belong to account owner")));
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").value(110.00))
+                .andExpect(jsonPath("$.email").value(EMAIL));
 
-        Bill notUpdated = billRepository.findById(bill.getBillId()).orElseThrow();
-        assertThat(notUpdated.getAmount()).isEqualByComparingTo(AMOUNT_100);
+        Bill actualBill = billRepository
+                .findById(bill.getBillId())
+                .orElseThrow();
 
-        verify(notificationCommandGateway, never()).sendDepositNotification(any());
-        verify(depositCommandGateway, never()).saveDeposit(any());
+        assertThat(actualBill.getAmount())
+                .isEqualByComparingTo("110.00");
     }
 
     @Test
-    @DisplayName("Should return 404 when attempting deposit to non-existent bill")
+    @DisplayName("Should return 404 for non-existent sandbox deposit bill")
     void depositBill_billNotFound() throws Exception {
-        DepositRequestDTO dto = new DepositRequestDTO(NON_EXISTENT_ID, DEPOSIT_AMOUNT_10, EMAIL);
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(NON_EXISTENT_ID);
 
-        mockMvc.perform(post("/bills/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits")
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content(json))
                 .andExpect(status().isNotFound());
     }
 

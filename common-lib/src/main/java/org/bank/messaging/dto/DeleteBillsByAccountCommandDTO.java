@@ -1,4 +1,10 @@
 package org.bank.messaging.dto;
 
-public record DeleteBillsByAccountCommandDTO(Long accountId) {
+import java.util.UUID;
+
+public record DeleteBillsByAccountCommandDTO(UUID messageId, Long accountId) {
+
+    public DeleteBillsByAccountCommandDTO(Long accountId) {
+        this(UUID.randomUUID(), accountId);
+    }
 }

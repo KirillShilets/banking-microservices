@@ -1,0 +1,3 @@
+CREATE USER notification_service_admin WITH PASSWORD 'notificationserviceadmin';
+CREATE DATABASE notification_service_database OWNER notification_service_admin;
+GRANT ALL PRIVILEGES ON DATABASE notification_service_database TO notification_service_admin;

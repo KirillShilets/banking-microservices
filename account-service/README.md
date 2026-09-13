@@ -1,289 +1,61 @@
-# Account Service
+# 🧾 Account Service
 
-**Account Service** — это микросервис, отвечающий за управление учётными записями пользователей в банковской системе.  
-Он предоставляет REST-API для CRUD-операций над аккаунтами, публикует доменные события, взаимодействует с `bill-service` через RabbitMQ и использует Liquibase для миграций.
+Сервис аккаунтов пользователей банка. Отвечает за создание и изменение аккаунта, получение текущего аккаунта по sub из JWT и публикацию команд для создания или удаления связанных счетов.
 
----
+## ✨ Функции
 
-## 🚀 Основной функционал
+- создание одного аккаунта для текущего пользователя;
+- получение аккаунта по ID или через /accounts/me;
+- обновление имени, email и телефона;
+- проверка владельца ресурса;
+- защита от повторного email и повторного аккаунта пользователя;
+- outbox для надежной публикации RabbitMQ-команд;
+- Liquibase-миграции PostgreSQL.
 
-- Создание аккаунта с последующей генерацией связанных счетов (через событие)
-- Получение детальной информации об аккаунте
-- Обновление данных аккаунта
-- Удаление аккаунта с каскадным удалением счетов (через событие)
-- Валидация входящих данных
-- Асинхронная обработка событий
-- Защита от дубликатов email
-- Чистые REST-эндпоинты
+## 📡 HTTP API
 
----
+Сервис доступен через Gateway на http://localhost:8989.
 
-## 🧩 Архитектура
+| Метод | URL | Описание |
+|---|---|---|
+| GET | /accounts/me | аккаунт текущего пользователя |
+| GET | /accounts/{accountId} | аккаунт по ID |
+| POST | /accounts | создать аккаунт и связанные счета |
+| PUT | /accounts/{accountId} | изменить аккаунт |
 
-### Слои
-- **Controller** — REST API и валидация (`AccountController`)
-- **Service** — бизнес-логика (`AccountServiceImpl`)
-- **Repository** — работа с БД через Spring Data JPA
-- **Entity** — модель таблицы accounts
-- **Event Handler** — обрабатывает доменные события:
-    - `AccountCreatedEvent` → создаёт счета через RabbitMQ command
-    - `AccountDeletedEvent` → удаляет счета по accountId
-- **Integration**:
-    - RabbitMQ (AMQP)
-    - `BillCommandGateway`
-    - Spring Cloud Discovery
-    - Spring Retry
-    - Liquibase миграции
+Для запросов требуется Bearer JWT. Клиент может работать только со своим аккаунтом; employee и admin имеют доступ к аккаунтам клиентов.
 
----
+Пример создания:
 
-## 📦 Конфигурация
-
-Сервис использует:
-- Spring Cloud Config
-- PostgreSQL
-- Liquibase
-- RabbitMQ listeners/publishers
-- Eureka Discovery Client
-- Async + Retry
-
-Фрагмент `application.yml`:
-
-```yaml
-spring:
-  application:
-    name: account-service
-  config:
-    import: "configserver:http://${SPRING_SECURITY_USER}:${SPRING_SECURITY_PASSWORD}@config-service:8001"
-  cloud:
-    config:
-      fail-fast: true
-```
-
----
-
-## 🗄 Liquibase миграции
-
-База создаётся через файл:
-
-`db/changelog/changes/001-create-accounts-table.xml`
-
-Основное:
-
-```xml
-<createTable tableName="accounts">
-    <column name="account_id" type="BIGSERIAL">
-        <constraints primaryKey="true" nullable="false"/>
-    </column>
-    <column name="name" type="VARCHAR(63)" />
-    <column name="email" type="VARCHAR(127)">
-        <constraints nullable="false" unique="true"/>
-    </column>
-    <column name="phone" type="VARCHAR(20)" />
-    <column name="creation_date" type="TIMESTAMPTZ" />
-</createTable>
-```
-
----
-
-## 📘 REST API
-
-### 🔹 Получить аккаунт
-```
-GET /accounts/{accountId}
-```
-
-**Response:**
-```json
+~~~json
 {
-  "name": "John",
-  "email": "john@test.com",
-  "phone": "+123456789",
-  "creationDate": "2025-01-01T12:00:00Z"
-}
-```
-
----
-
-### 🔹 Создать аккаунт
-```
-POST /accounts
-```
-
-**Request:**
-```json
-{
-  "name": "John",
-  "email": "john@test.com",
-  "phone": "+123456789",
+  "name": "Kira Customer",
+  "email": "kira@example.com",
+  "phone": "+375291234567",
   "bills": [
-    { "amount": 100.00, "isDefault": true }
+    { "amount": 0.00, "overdraftEnabled": false }
   ]
 }
-```
+~~~
 
-**Response:**
-```json
-1
-```
+## 🔄 Взаимодействие
 
-📌 **Плюс:**  
-Сразу после коммита публикуется `AccountCreatedEvent`, который отправляет команду создания счетов в `bill-service` через RabbitMQ.
+После создания аккаунта сервис сохраняет outbox-событие ACCOUNT_CREATED. bill-service получает команду bill.account.created и создает связанные счета. При удалении аккаунта используется команда bill.account.deleted.
 
----
+## ⚙️ Конфигурация
 
-### 🔹 Обновить аккаунт
-```
-PUT /accounts/{accountId}
-```
+- порт: 8081;
+- база: account_service_database;
+- конфигурация: Config Server, ключ account-service;
+- discovery: Eureka;
+- messaging: RabbitMQ.
 
-**Request:**
-```json
-{
-  "name": "John Doe",
-  "email": "john@test.com",
-  "phone": "+123456789"
-}
-```
+Секреты базы данных задаются через ACCOUNT_DB_USER и ACCOUNT_DB_PASSWORD в .env.
 
----
+## 🧪 Тесты
 
-### 🔹 Удалить аккаунт
-```
-DELETE /accounts/{accountId}
-```
+~~~powershell
+.\gradlew.bat :account-service:test
+~~~
 
-Событие `AccountDeletedEvent` запускает удаление всех счетов в `bill-service`.
-
----
-
-## 🔔 Доменные события
-
-### AccountCreatedEvent
-Отправляется после успешного создания.
-
-```java
-new AccountCreatedEvent(accountId, bills)
-```
-
-Хендлер вызывает:
-
-```java
-billCommandGateway.createBillsForAccount(accountId, bills)
-```
-
-### AccountDeletedEvent
-Отправляется после удаления.
-
-```java
-billCommandGateway.deleteBillsByAccountId(accountId)
-```
-
----
-
-## 🧪 Тестирование
-
-В проекте есть:
-
-### ✔ Unit-тесты:
-- **Controller**: валидация, ответы, mock сервиса
-- **Service**: ошибки, события, правила уникальности
-- **Repository**: JPA-маппинг, уникальность email
-
-### ✔ Интеграционные тесты:
-- поднятие контекста Spring Boot
-- реальный PostgreSQL через testcontainers (EnablePostgresTestConfiguration)
-- mock для BillCommandGateway
-- проверка:
-    - сохранения в БД
-    - отправки RabbitMQ-команд
-    - обработки событий
-    - Liquibase миграций
-
----
-
-## 🧱 Структура проекта
-
-```
-account-service
- ├── controller
- │    ├── AccountController.java
- │    └── dto/...
- ├── service
- │    ├── AccountService.java
- │    └── AccountServiceImpl.java
- ├── handler
- │    ├── AccountEventHandler.java
- │    └── event/*.java
- ├── repository
- │    └── AccountRepository.java
- ├── entity
- │    └── Account.java
- ├── test (unit + integration)
- ├── resources/db/changelog
- │    └── 001-create-accounts-table.xml
- └── AccountApplication.java
-```
-
----
-
-## 🔧 Запуск
-
-### 1. Собрать:
-```
-mvn clean install
-```
-
-### 2. Запустить:
-```
-java -jar account-service.jar
-```
-
-Сервис автоматически зарегистрируется в Eureka и подтянет конфигурацию из config-service.
-
----
-
-## 📡 Взаимодействие с другими сервисами
-
-### bill-service
-Через RabbitMQ команды:
-
-- `bill.account.created`
-- `bill.account.deleted`
-
-Команды выполняются **асинхронно** и обрабатываются `bill-service` listener-ами.
-
----
-
-## 📜 Ошибки и обработка
-
-Глобальный обработчик (`GlobalExceptionHandler`) возвращает структурированные ответы:
-
-- `404 Not Found` — аккаунт не найден
-- `409 Conflict` — email уже существует
-- `400 Bad Request` — неверная валидация
-
-Пример ошибки:
-
-```json
-{
-  "message": "Account with email: john@test.com already exists",
-  "timestamp": "2025-01-10T13:12:00Z"
-}
-```
-
----
-
-## 🧰 Используемые технологии
-
-- Java 17
-- Spring Boot 3.5.6
-- Spring Cloud (Eureka, Config)
-- RabbitMQ (AMQP)
-- PostgreSQL
-- Liquibase
-- JPA / Hibernate
-- Mockito / Testcontainers / MockMvc
-- Lombok
-
----
+В модуле есть unit-тесты контроллеров, сервисов и репозитория, а также integration-тесты с PostgreSQL Testcontainer.

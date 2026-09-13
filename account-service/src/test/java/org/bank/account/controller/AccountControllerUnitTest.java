@@ -84,7 +84,7 @@ class AccountControllerUnitTest {
     @Test
     @DisplayName("Should create account and return Location header")
     void createAccount_success() throws Exception {
-        List<CreateBillRequestDTO> bills = List.of(new CreateBillRequestDTO(BigDecimal.TEN, true));
+        List<CreateBillRequestDTO> bills = List.of(new CreateBillRequestDTO(BigDecimal.ZERO, false));
         AccountRequestDTO dto = new AccountRequestDTO(NAME, EMAIL, PHONE, bills);
 
         when(accountService.createAccount(dto.name(), dto.email(), dto.phone(), dto.bills()))
@@ -122,17 +122,6 @@ class AccountControllerUnitTest {
     }
 
     @Test
-    @DisplayName("Should delete account and return No Content")
-    void deleteAccount_success() throws Exception {
-        doNothing().when(accountService).deleteAccount(ACCOUNT_ID);
-
-        mockMvc.perform(delete("/accounts/{accountId}", ACCOUNT_ID))
-                .andExpect(status().isNoContent());
-
-        verify(accountService).deleteAccount(ACCOUNT_ID);
-    }
-
-    @Test
     @DisplayName("Should return 404 Not Found when getting non-existent account")
     void getAccount_notFound() throws Exception {
         when(accountService.getAccount(NON_EXISTENT_ID)).thenThrow(new NotFoundException("Account not found"));
@@ -141,16 +130,6 @@ class AccountControllerUnitTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Account not found"))
                 .andExpect(jsonPath("$.timestamp").value(matchesPattern("^\\d{4}-\\d{2}-\\d{2}T.*")));
-    }
-
-    @Test
-    @DisplayName("Should return 404 Not Found when deleting non-existent account")
-    void deleteAccount_notFound() throws Exception {
-        doThrow(new NotFoundException("Account not found")).when(accountService).deleteAccount(NON_EXISTENT_ID);
-
-        mockMvc.perform(delete("/accounts/{accountId}", NON_EXISTENT_ID))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value("Account not found"));
     }
 
     @Test

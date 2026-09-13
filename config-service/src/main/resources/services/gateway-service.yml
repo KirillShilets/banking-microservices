@@ -10,7 +10,7 @@ spring:
         webflux:
           discovery:
             locator:
-              enabled: true
+              enabled: false
               lower-case-service-id: true
           routes:
             - id: account_service_route
@@ -25,14 +25,10 @@ spring:
               uri: lb://deposit-service
               predicates:
                 - Path=/deposits/**
-            - id: notification_service_route
-              uri: lb://notification-service
-              predicates:
-                - Path=/notifications/**
           httpclient:
-            wiretap: true
+            wiretap: false
           httpserver:
-            wiretap: true
+            wiretap: false
           globalcors:
             cors-configurations:
               '[/**]':

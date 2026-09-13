@@ -2,278 +2,232 @@
 import { accountsApi } from '../../api/modules'
 import { ActionCard } from '../common/ActionCard'
 import type { TabProps } from '../common/types'
-import type { BillDraft } from '../../shared/form-utils'
-import { parseAmount, parsePositiveId } from '../../shared/form-utils'
+import { parsePositiveId } from '../../shared/form-utils'
 
-export function AccountsTab({ isBusy, executeAction }: TabProps) {
-  const [lookupAccountId, setLookupAccountId] = useState('1')
-  const [accountName, setAccountName] = useState('')
-  const [accountEmail, setAccountEmail] = useState('')
-  const [accountPhone, setAccountPhone] = useState('+375291234567')
-  const [initialBills, setInitialBills] = useState<BillDraft[]>([
-    { amount: '100.00', overdraftEnabled: false },
-  ])
-  const [updateAccountId, setUpdateAccountId] = useState('1')
+export function AccountsTab({
+                              isBusy,
+                              executeAction,
+                            }: TabProps) {
+  const [lookupId, setLookupId] = useState('')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [billCount, setBillCount] = useState('1')
+
+  const [updateId, setUpdateId] = useState('')
   const [updateName, setUpdateName] = useState('')
   const [updateEmail, setUpdateEmail] = useState('')
-  const [updatePhone, setUpdatePhone] = useState('+375291234567')
-  const [deleteAccountId, setDeleteAccountId] = useState('1')
+  const [updatePhone, setUpdatePhone] = useState('')
 
-  const addInitialBill = () => {
-    setInitialBills((previous) => [
-      ...previous,
-      { amount: '10.00', overdraftEnabled: false },
-    ])
-  }
-
-  const removeInitialBill = (index: number) => {
-    setInitialBills((previous) => previous.filter((_, item) => item !== index))
-  }
-
-  const updateInitialBillAmount = (index: number, amount: string) => {
-    setInitialBills((previous) =>
-      previous.map((bill, item) => (item === index ? { ...bill, amount } : bill)),
-    )
-  }
-
-  const toggleInitialBillOverdraft = (index: number, overdraftEnabled: boolean) => {
-    setInitialBills((previous) =>
-      previous.map((bill, item) =>
-        item === index ? { ...bill, overdraftEnabled } : bill,
-      ),
-    )
-  }
-
-  const handleGetAccount = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    void executeAction('Аккаунт получен', () =>
-      accountsApi.getAccount(parsePositiveId(lookupAccountId, 'Account ID')),
-    )
-  }
-
-  const handleCreateAccount = (event: FormEvent<HTMLFormElement>) => {
+  const getCurrent = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    void executeAction('Аккаунт создан', async () => {
-      if (initialBills.length === 0) {
-        throw new Error('Добавьте хотя бы один стартовый счет.')
+    void executeAction(
+        'Мой профиль',
+        () => accountsApi.getCurrentAccount(),
+    )
+  }
+
+  const getAccount = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    void executeAction('Профиль получен', () =>
+        accountsApi.getAccount(
+            parsePositiveId(lookupId, 'ID клиента'),
+        ),
+    )
+  }
+
+  const createAccount = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    void executeAction('Профиль создан', async () => {
+      const count = parsePositiveId(billCount, 'Количество счетов')
+
+      if (count > 20) {
+        throw new Error('Допустимо не более 20 начальных счетов.')
       }
 
-      const createdAccountId = await accountsApi.createAccount({
-        name: accountName.trim(),
-        email: accountEmail.trim(),
-        phone: accountPhone.trim(),
-        bills: initialBills.map((bill, index) => ({
-          amount: parseAmount(bill.amount, `Стартовый счет ${index + 1}`),
-          overdraftEnabled: bill.overdraftEnabled,
+      const id = await accountsApi.createAccount({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        bills: Array.from({ length: count }, () => ({
+          amount: 0,
+          overdraftEnabled: false,
         })),
       })
 
-      setLookupAccountId(String(createdAccountId))
-      setUpdateAccountId(String(createdAccountId))
-      setDeleteAccountId(String(createdAccountId))
+      setLookupId(String(id))
+      setUpdateId(String(id))
 
       return {
-        accountId: createdAccountId,
-        message: 'Аккаунт успешно создан.',
+        accountId: id,
+        message:
+            'Профиль создан. Открытие счетов выполняется асинхронно.',
       }
     })
   }
 
-  const handleUpdateAccount = (event: FormEvent<HTMLFormElement>) => {
+  const updateAccount = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    void executeAction('Аккаунт обновлен', () =>
-      accountsApi.updateAccount(parsePositiveId(updateAccountId, 'Account ID'), {
-        name: updateName.trim(),
-        email: updateEmail.trim(),
-        phone: updatePhone.trim(),
-      }),
+
+    void executeAction('Профиль обновлён', () =>
+        accountsApi.updateAccount(
+            parsePositiveId(updateId, 'ID клиента'),
+            {
+              name: updateName.trim(),
+              email: updateEmail.trim(),
+              phone: updatePhone.trim(),
+            },
+        ),
     )
   }
 
-  const handleDeleteAccount = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    void executeAction('Аккаунт удален', async () => {
-      const accountId = parsePositiveId(deleteAccountId, 'Account ID')
-      await accountsApi.deleteAccount(accountId)
-      return {
-        accountId,
-        message: 'Аккаунт удален.',
-      }
-    })
-  }
-
   return (
-    <div className="forms-grid">
-      <ActionCard
-        title="Получить аккаунт по ID"
-        description="Запрос в account-service через gateway."
-        submitLabel="Получить аккаунт"
-        isBusy={isBusy}
-        onSubmit={handleGetAccount}
-      >
-        <label>
-          Account ID
-          <input
-            type="number"
-            min="1"
-            required
-            value={lookupAccountId}
-            onChange={(event) => setLookupAccountId(event.target.value)}
-          />
-        </label>
-      </ActionCard>
+      <div className="forms-grid" aria-busy={isBusy}>
+        <ActionCard
+            title="Мой профиль"
+            description="Профиль текущего пользователя."
+            submitLabel="Получить мой профиль"
+            isBusy={isBusy}
+            onSubmit={getCurrent}
+        >
+          <p>Идентификатор владельца определяется по вашей сессии.</p>
+        </ActionCard>
 
-      <ActionCard
-        title="Создать аккаунт"
-        description="Создает клиента и один или несколько стартовых счетов."
-        submitLabel="Создать аккаунт"
-        isBusy={isBusy}
-        onSubmit={handleCreateAccount}
-      >
-        <label>
-          Имя
-          <input
-            type="text"
-            minLength={3}
-            maxLength={63}
-            required
-            value={accountName}
-            onChange={(event) => setAccountName(event.target.value)}
-          />
-        </label>
-        <label>
-          Email
-          <input
-            type="email"
-            required
-            value={accountEmail}
-            onChange={(event) => setAccountEmail(event.target.value)}
-          />
-        </label>
-        <label>
-          Телефон
-          <input
-            type="text"
-            required
-            value={accountPhone}
-            onChange={(event) => setAccountPhone(event.target.value)}
-          />
-        </label>
-
-        <div className="draft-list">
-          <div className="draft-list-head">
-            <strong>Стартовые счета</strong>
-            <button type="button" className="ghost-button" onClick={addInitialBill}>
-              + Добавить
-            </button>
-          </div>
-
-          {initialBills.map((bill, index) => (
-            <div key={`initial-bill-${index}`} className="draft-row">
-              <label>
-                Сумма
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
+        <ActionCard
+            title="Получить профиль"
+            description="Доступ к чужим профилям проверяется сервером."
+            submitLabel="Получить"
+            isBusy={isBusy}
+            onSubmit={getAccount}
+        >
+          <fieldset disabled={isBusy}>
+            <label>
+              ID клиента
+              <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]+"
                   required
-                  value={bill.amount}
-                  onChange={(event) =>
-                    updateInitialBillAmount(index, event.target.value)
-                  }
-                />
-              </label>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={bill.overdraftEnabled}
-                  onChange={(event) =>
-                    toggleInitialBillOverdraft(index, event.target.checked)
-                  }
-                />
-                Overdraft
-              </label>
-              <button
-                type="button"
-                className="ghost-button danger-text"
-                onClick={() => removeInitialBill(index)}
-                disabled={initialBills.length === 1}
-              >
-                Удалить
-              </button>
-            </div>
-          ))}
-        </div>
-      </ActionCard>
+                  value={lookupId}
+                  onChange={(event) => setLookupId(event.target.value)}
+              />
+            </label>
+          </fieldset>
+        </ActionCard>
 
-      <ActionCard
-        title="Обновить аккаунт"
-        description="Обновляет name, email и phone."
-        submitLabel="Обновить аккаунт"
-        isBusy={isBusy}
-        onSubmit={handleUpdateAccount}
-      >
-        <label>
-          Account ID
-          <input
-            type="number"
-            min="1"
-            required
-            value={updateAccountId}
-            onChange={(event) => setUpdateAccountId(event.target.value)}
-          />
-        </label>
-        <label>
-          Имя
-          <input
-            type="text"
-            minLength={3}
-            maxLength={63}
-            required
-            value={updateName}
-            onChange={(event) => setUpdateName(event.target.value)}
-          />
-        </label>
-        <label>
-          Email
-          <input
-            type="email"
-            required
-            value={updateEmail}
-            onChange={(event) => setUpdateEmail(event.target.value)}
-          />
-        </label>
-        <label>
-          Телефон
-          <input
-            type="text"
-            required
-            value={updatePhone}
-            onChange={(event) => setUpdatePhone(event.target.value)}
-          />
-        </label>
-      </ActionCard>
+        <ActionCard
+            title="Создать мой профиль"
+            description="Один профиль на пользователя. Начальные счета открываются без денег и овердрафта."
+            submitLabel="Создать"
+            isBusy={isBusy}
+            onSubmit={createAccount}
+        >
+          <fieldset disabled={isBusy}>
+            <label>
+              Имя
+              <input
+                  required
+                  minLength={3}
+                  maxLength={63}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+              />
+            </label>
 
-      <ActionCard
-        title="Удалить аккаунт"
-        description="Удаляет аккаунт и связанные данные."
-        submitLabel="Удалить аккаунт"
-        isBusy={isBusy}
-        onSubmit={handleDeleteAccount}
-        tone="danger"
-      >
-        <label>
-          Account ID
-          <input
-            type="number"
-            min="1"
-            required
-            value={deleteAccountId}
-            onChange={(event) => setDeleteAccountId(event.target.value)}
-          />
-        </label>
-      </ActionCard>
-    </div>
+            <label>
+              Email
+              <input
+                  type="email"
+                  required
+                  maxLength={127}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Телефон
+              <input
+                  type="tel"
+                  required
+                  pattern="\+?[0-9]{10,15}"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Количество счетов
+              <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  step={1}
+                  required
+                  value={billCount}
+                  onChange={(event) => setBillCount(event.target.value)}
+              />
+            </label>
+          </fieldset>
+        </ActionCard>
+
+        <ActionCard
+            title="Изменить контактные данные"
+            description="Изменяются только имя, email и телефон."
+            submitLabel="Сохранить"
+            isBusy={isBusy}
+            onSubmit={updateAccount}
+        >
+          <fieldset disabled={isBusy}>
+            <label>
+              ID клиента
+              <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]+"
+                  required
+                  value={updateId}
+                  onChange={(event) => setUpdateId(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Имя
+              <input
+                  required
+                  minLength={3}
+                  maxLength={63}
+                  value={updateName}
+                  onChange={(event) => setUpdateName(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Email
+              <input
+                  type="email"
+                  required
+                  maxLength={127}
+                  value={updateEmail}
+                  onChange={(event) => setUpdateEmail(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Телефон
+              <input
+                  type="tel"
+                  required
+                  pattern="\+?[0-9]{10,15}"
+                  value={updatePhone}
+                  onChange={(event) => setUpdatePhone(event.target.value)}
+              />
+            </label>
+          </fieldset>
+        </ActionCard>
+      </div>
   )
 }

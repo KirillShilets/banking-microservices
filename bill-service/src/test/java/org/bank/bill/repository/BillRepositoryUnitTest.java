@@ -83,24 +83,4 @@ class BillRepositoryUnitTest {
     void existsBillByAccountId_shouldReturnFalse() {
         assertThat(billRepository.existsBillByAccountId(ACCOUNT_ID)).isFalse();
     }
-
-    @Test
-    @DisplayName("Should delete all bills for specific accountId")
-    void deleteBillsByAccountId_success() {
-        Bill bill1 = new Bill(ACCOUNT_ID, AMOUNT, true);
-        Bill bill2 = new Bill(ACCOUNT_ID, AMOUNT, false);
-        Bill billOther = new Bill(2L, AMOUNT, true);
-        billRepository.saveAll(List.of(bill1, bill2, billOther));
-
-        entityManager.flush();
-        entityManager.clear();
-
-        billRepository.deleteBillsByAccountId(ACCOUNT_ID);
-
-        List<Bill> remainingAccount1 = billRepository.getBillsByAccountId(ACCOUNT_ID);
-        assertThat(remainingAccount1).isEmpty();
-
-        List<Bill> remainingAccount2 = billRepository.getBillsByAccountId(2L);
-        assertThat(remainingAccount2).hasSize(1);
-    }
 }

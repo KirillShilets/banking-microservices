@@ -51,11 +51,4 @@ public class AccountController {
                                                                   @Valid @RequestBody UpdateAccountRequestDTO updateAccountRequestDTO) {
         return ResponseEntity.ok(accountService.updateAccount(accountId, updateAccountRequestDTO.name(), updateAccountRequestDTO.email(), updateAccountRequestDTO.phone()));
     }
-
-    @DeleteMapping("/{accountId}")
-    @PreAuthorize("hasRole('admin')")
-    public ResponseEntity<Void> deleteAccount(@PathVariable Long accountId) {
-        accountService.deleteAccount(accountId);
-        return ResponseEntity.noContent().build();
-    }
 }

@@ -1,51 +1,44 @@
 ﻿import axios, {
+    AxiosHeaders,
     type AxiosRequestConfig,
-    type AxiosError, AxiosHeaders,
 } from 'axios'
-import { API_BASE_URL, API_TIMEOUT_MS } from './api-config'
+import {
+    API_BASE_URL,
+    API_TIMEOUT_MS,
+} from './api-config'
 import { getApiErrorMessage } from './error-mapper'
-import { keycloak } from '../../auth/keycloak'
+import {
+    AuthenticationRequiredError,
+    getAccessToken,
+} from '../../auth/session'
+
+export class ApiError extends Error {
+    readonly status: number | undefined
+
+    constructor(
+        message: string,
+        status?: number,
+        cause?: unknown,
+    ) {
+        super(message, { cause })
+        this.name = 'ApiError'
+        this.status = status
+    }
+}
 
 const httpClient = axios.create({
     baseURL: API_BASE_URL,
     timeout: API_TIMEOUT_MS,
-    headers: {
-        'Content-Type': 'application/json',
-    },
 })
 
-httpClient.interceptors.request.use(
-    async (config) => {
-        try {
-            if (keycloak.authenticated && keycloak.token) {
-                await keycloak.updateToken(30)
+httpClient.interceptors.request.use(async (config) => {
+    const token = await getAccessToken()
 
-                if (!config.headers) {
-                    config.headers = new AxiosHeaders()
-                }
+    config.headers = AxiosHeaders.from(config.headers)
+    config.headers.set('Authorization', `Bearer ${token}`)
 
-                config.headers.set('Authorization', `Bearer ${keycloak.token}`)
-            }
-        } catch (error) {
-            console.error('Failed to refresh token', error)
-            keycloak.login()
-        }
-
-        return config
-    },
-)
-
-httpClient.interceptors.response.use(
-    (response) => response,
-    async (error: AxiosError) => {
-        if (error.response?.status === 401) {
-            console.warn('Unauthorized, redirecting to login...')
-            keycloak.login()
-        }
-
-        return Promise.reject(error)
-    },
-)
+    return config
+})
 
 async function request<TResponse>(
     config: AxiosRequestConfig,
@@ -54,12 +47,48 @@ async function request<TResponse>(
         const response = await httpClient.request<TResponse>(config)
         return response.data
     } catch (error) {
-        throw new Error(getApiErrorMessage(error))
+        if (error instanceof AuthenticationRequiredError) {
+            throw error
+        }
+
+        if (axios.isAxiosError(error)) {
+            if (error.response?.status === 401) {
+                throw new AuthenticationRequiredError(
+                    'API отклонил авторизацию. Выполните вход повторно. '
+                    + 'Если ошибка повторяется, проверьте настройки авторизации.',
+                )
+            }
+
+            if (!error.response && error.code !== 'ERR_CANCELED') {
+                throw new ApiError(
+                    'Не удалось получить ответ сервера. '
+                    + 'Результат операции может быть неизвестен; '
+                    + 'не повторяйте финансовый запрос вслепую.',
+                    undefined,
+                    error,
+                )
+            }
+
+            throw new ApiError(
+                getApiErrorMessage(error),
+                error.response?.status,
+                error,
+            )
+        }
+
+        throw new ApiError(
+            getApiErrorMessage(error),
+            undefined,
+            error,
+        )
     }
 }
 
 export const apiRequest = {
-    get: <TResponse>(url: string, config?: AxiosRequestConfig) =>
+    get: <TResponse>(
+        url: string,
+        config?: AxiosRequestConfig,
+    ) =>
         request<TResponse>({
             ...config,
             url,
@@ -90,7 +119,10 @@ export const apiRequest = {
             data: body,
         }),
 
-    delete: <TResponse = void>(url: string, config?: AxiosRequestConfig) =>
+    delete: <TResponse = void>(
+        url: string,
+        config?: AxiosRequestConfig,
+    ) =>
         request<TResponse>({
             ...config,
             url,

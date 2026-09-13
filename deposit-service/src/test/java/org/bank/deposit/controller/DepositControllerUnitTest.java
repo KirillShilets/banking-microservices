@@ -22,7 +22,9 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 import static org.hamcrest.Matchers.matchesPattern;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -35,7 +37,8 @@ class DepositControllerUnitTest {
     private static final Long BILL_ID = 100L;
     private static final BigDecimal AMOUNT = new BigDecimal("100.00");
     private static final String EMAIL = "test@yandex.com";
-    private static final OffsetDateTime DEFAULT_TIME = OffsetDateTime.parse("2025-12-12T12:00:00Z");
+    private static final OffsetDateTime DEFAULT_TIME =
+            OffsetDateTime.parse("2025-12-12T12:00:00Z");
 
     @Mock
     private DepositService depositService;
@@ -48,56 +51,45 @@ class DepositControllerUnitTest {
 
     @BeforeEach
     void setUp() {
-        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        LocalValidatorFactoryBean validator =
+                new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
         objectMapper = new ObjectMapper().findAndRegisterModules();
 
-        mockMvc = MockMvcBuilders.standaloneSetup(depositController)
+        mockMvc = MockMvcBuilders
+                .standaloneSetup(depositController)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
     }
 
     @Test
-    @DisplayName("Should create deposit and return created details")
-    void saveDeposit_success() throws Exception {
-        DepositRequestDTO requestDTO = new DepositRequestDTO(BILL_ID, AMOUNT, EMAIL);
-        DepositResponseDTO responseDTO = new DepositResponseDTO(BILL_ID, AMOUNT, EMAIL, DEFAULT_TIME);
-
-        when(depositService.saveDeposit(requestDTO.billId(), requestDTO.amount(), requestDTO.email()))
-                .thenReturn(responseDTO);
-
-        mockMvc.perform(post("/deposits")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestDTO)))
-                .andExpect(status().isCreated())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.billId").value(BILL_ID))
-                .andExpect(jsonPath("$.amount").value(100.00))
-                .andExpect(jsonPath("$.email").value(EMAIL));
-
-        verify(depositService).saveDeposit(requestDTO.billId(), requestDTO.amount(), requestDTO.email());
-    }
-
-    @Test
     @DisplayName("Should return deposit details when deposit exists")
     void getDeposit_success() throws Exception {
-        DepositResponseDTO responseDTO = new DepositResponseDTO(BILL_ID, AMOUNT, EMAIL, DEFAULT_TIME);
+        DepositResponseDTO response =
+                new DepositResponseDTO(
+                        BILL_ID,
+                        AMOUNT,
+                        EMAIL,
+                        DEFAULT_TIME
+                );
 
-        when(depositService.getDeposit(DEPOSIT_ID)).thenReturn(responseDTO);
+        when(depositService.getDeposit(DEPOSIT_ID))
+                .thenReturn(response);
 
         mockMvc.perform(get("/deposits/{depositId}", DEPOSIT_ID))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.billId").value(BILL_ID))
+                .andExpect(jsonPath("$.amount").value(100.00))
                 .andExpect(jsonPath("$.email").value(EMAIL));
 
         verify(depositService).getDeposit(DEPOSIT_ID);
     }
 
     @Test
-    @DisplayName("Should return 404 Not Found when getting non-existent deposit")
+    @DisplayName("Should return 404 when deposit does not exist")
     void getDeposit_notFound() throws Exception {
         when(depositService.getDeposit(NON_EXISTENT_ID))
                 .thenThrow(new NotFoundException("Deposit not found"));
@@ -105,19 +97,37 @@ class DepositControllerUnitTest {
         mockMvc.perform(get("/deposits/{depositId}", NON_EXISTENT_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Deposit not found"))
-                .andExpect(jsonPath("$.timestamp").value(matchesPattern("^\\d{4}-\\d{2}-\\d{2}T.*")));
+                .andExpect(jsonPath("$.timestamp")
+                        .value(matchesPattern("^\\d{4}-\\d{2}-\\d{2}T.*")));
+
+        verify(depositService).getDeposit(NON_EXISTENT_ID);
     }
 
     @Test
-    @DisplayName("Should return 400 Bad Request when input validation fails")
-    void saveDeposit_validationError() throws Exception {
-        DepositRequestDTO invalidDto = new DepositRequestDTO(null, null, "invalid");
+    @DisplayName("Deposit creation through HTTP is not supported")
+    void saveDeposit_endpointAbsent() throws Exception {
+        DepositRequestDTO request =
+                new DepositRequestDTO(BILL_ID, AMOUNT, EMAIL);
 
         mockMvc.perform(post("/deposits")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidDto)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.timestamp").exists());
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+
+        verifyNoInteractions(depositService);
+    }
+
+    @Test
+    @DisplayName("Validation is not performed for unsupported HTTP endpoint")
+    void saveDeposit_validationIsNotAppliedToAbsentEndpoint()
+            throws Exception {
+        DepositRequestDTO invalidRequest =
+                new DepositRequestDTO(null, null, "invalid");
+
+        mockMvc.perform(post("/deposits")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidRequest)))
+                .andExpect(status().isNotFound());
 
         verifyNoInteractions(depositService);
     }

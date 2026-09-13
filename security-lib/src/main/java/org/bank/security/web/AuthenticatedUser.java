@@ -26,4 +26,13 @@ public class AuthenticatedUser {
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(expected::equals);
     }
+
+    public boolean isAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_admin"));
+    }
 }
