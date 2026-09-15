@@ -1,13 +1,14 @@
 package org.bank.account.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bank.account.controller.dto.AccountRequestDTO;
+import org.bank.account.controller.dto.UpdateAccountRequestDTO;
 import org.bank.account.entity.Account;
 import org.bank.account.messaging.BillCommandGateway;
 import org.bank.account.repository.AccountRepository;
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
-import org.bank.account.controller.dto.AccountRequestDTO;
-import org.bank.account.controller.dto.UpdateAccountRequestDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
+import org.bank.messaging.dto.CreateBillsCommandDTO;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,13 +30,17 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThan;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -46,9 +51,11 @@ class AccountIntegrationTest {
     private static final String NAME = "name";
     private static final String EMAIL = "test@test.com";
     private static final String PHONE = "+375290000000";
-    private static final BigDecimal AMOUNT = BigDecimal.ZERO;
-    private static final OffsetDateTime DEFAULT_TIME = OffsetDateTime.parse("2025-12-12T12:00:00Z");
-    private static final String OWNER_SUB = "11111111-1111-1111-1111-111111111111";
+    private static final BigDecimal ZERO_BALANCE = BigDecimal.ZERO;
+    private static final OffsetDateTime DEFAULT_TIME =
+            OffsetDateTime.parse("2025-12-12T12:00:00Z");
+    private static final String OWNER_SUB =
+            "11111111-1111-1111-1111-111111111111";
 
     @Autowired
     private MockMvc mockMvc;
@@ -66,21 +73,25 @@ class AccountIntegrationTest {
     private JwtDecoder jwtDecoder;
 
     @AfterEach
-    void clear() {
+    void clearDatabase() {
         accountRepository.deleteAll();
     }
 
     private RequestPostProcessor adminJwt() {
         return jwt()
                 .authorities(new SimpleGrantedAuthority("ROLE_admin"))
-                .jwt(j -> j.subject(OWNER_SUB)
-                        .claim("realm_access", Map.of("roles", List.of("admin"))));
+                .jwt(jwt -> jwt
+                        .subject(OWNER_SUB)
+                        .claim(
+                                "realm_access",
+                                Map.of("roles", List.of("admin"))
+                        ));
     }
 
     @Test
     @DisplayName("Unauthenticated request cannot delete an account")
-    void deleteAccount_noJwt_unauthorized() throws Exception {
-        Account saved = accountRepository.save(
+    void deleteAccountWithoutJwtReturnsUnauthorized() throws Exception {
+        Account savedAccount = accountRepository.save(
                 new Account(
                         OWNER_SUB,
                         NAME,
@@ -90,17 +101,24 @@ class AccountIntegrationTest {
                 )
         );
 
-        mockMvc.perform(delete("/accounts/{accountId}", saved.getAccountId()))
+        mockMvc.perform(
+                        delete(
+                                "/accounts/{accountId}",
+                                savedAccount.getAccountId()
+                        )
+                )
                 .andExpect(status().isUnauthorized());
 
-        assertThat(accountRepository.existsById(saved.getAccountId())).isTrue();
+        assertThat(
+                accountRepository.existsById(savedAccount.getAccountId())
+        ).isTrue();
     }
 
     @Test
     @DisplayName("Should create account and request zero-balance bill opening")
-    void createAccount_success() throws Exception {
+    void createAccountSuccessfully() throws Exception {
         List<CreateBillRequestDTO> bills = List.of(
-                new CreateBillRequestDTO(BigDecimal.ZERO, false)
+                new CreateBillRequestDTO(ZERO_BALANCE, false)
         );
 
         AccountRequestDTO request = new AccountRequestDTO(
@@ -110,10 +128,14 @@ class AccountIntegrationTest {
                 bills
         );
 
-        String response = mockMvc.perform(post("/accounts")
-                        .with(adminJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response = mockMvc.perform(
+                        post("/accounts")
+                                .with(adminJwt())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(request)
+                                )
+                )
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
                 .andExpect(jsonPath("$", greaterThan(0)))
@@ -123,27 +145,49 @@ class AccountIntegrationTest {
 
         Long accountId = objectMapper.readValue(response, Long.class);
 
-        Account saved = accountRepository.findById(accountId)
+        Account savedAccount = accountRepository.findById(accountId)
                 .orElseThrow();
 
-        assertThat(saved.getOwnerSubject()).isEqualTo(OWNER_SUB);
-        assertThat(saved.getEmail()).isEqualTo(EMAIL);
-        assertThat(saved.getName()).isEqualTo(NAME);
+        assertThat(savedAccount.getOwnerSubject())
+                .isEqualTo(OWNER_SUB);
+        assertThat(savedAccount.getEmail())
+                .isEqualTo(EMAIL);
+        assertThat(savedAccount.getName())
+                .isEqualTo(NAME);
 
         verify(billCommandGateway, timeout(5000))
                 .createBillsForAccount(
-                        eq(accountId),
-                        eq(bills)
+                        argThat(command ->
+                                command != null
+                                        && accountId.equals(
+                                        command.accountId()
+                                )
+                                        && bills.equals(command.bills())
+                                        && command.messageId() != null
+                        )
                 );
     }
 
     @Test
     @DisplayName("Should retrieve existing account from database")
-    void getAccount_success() throws Exception {
-        Account saved = accountRepository.save(new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME));
+    void getAccountSuccessfully() throws Exception {
+        Account savedAccount = accountRepository.save(
+                new Account(
+                        OWNER_SUB,
+                        NAME,
+                        EMAIL,
+                        PHONE,
+                        DEFAULT_TIME
+                )
+        );
 
-        mockMvc.perform(get("/accounts/" + saved.getAccountId())
-                        .with(adminJwt()))
+        mockMvc.perform(
+                        get(
+                                "/accounts/{accountId}",
+                                savedAccount.getAccountId()
+                        )
+                                .with(adminJwt())
+                )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(EMAIL))
                 .andExpect(jsonPath("$.name").value(NAME));
@@ -151,37 +195,72 @@ class AccountIntegrationTest {
 
     @Test
     @DisplayName("Should update account details in database via API")
-    void updateAccount_success() throws Exception {
-        Account saved = accountRepository.save(new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME));
-        UpdateAccountRequestDTO dto = new UpdateAccountRequestDTO("update-name", EMAIL, PHONE);
+    void updateAccountSuccessfully() throws Exception {
+        Account savedAccount = accountRepository.save(
+                new Account(
+                        OWNER_SUB,
+                        NAME,
+                        EMAIL,
+                        PHONE,
+                        DEFAULT_TIME
+                )
+        );
 
-        mockMvc.perform(put("/accounts/" + saved.getAccountId())
-                        .with(adminJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+        UpdateAccountRequestDTO request = new UpdateAccountRequestDTO(
+                "updated-name",
+                EMAIL,
+                PHONE
+        );
+
+        mockMvc.perform(
+                        put(
+                                "/accounts/{accountId}",
+                                savedAccount.getAccountId()
+                        )
+                                .with(adminJwt())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(request)
+                                )
+                )
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("update-name"));
+                .andExpect(jsonPath("$.name").value("updated-name"));
 
-        Account updatedAccount = accountRepository.findById(saved.getAccountId()).orElseThrow();
-        assertThat(updatedAccount.getName()).isEqualTo("update-name");
+        Account updatedAccount = accountRepository.findById(
+                        savedAccount.getAccountId()
+                )
+                .orElseThrow();
+
+        assertThat(updatedAccount.getName())
+                .isEqualTo("updated-name");
     }
 
     @Test
     @DisplayName("Should return 404 when getting non-existent account ID")
-    void getAccount_notFound() throws Exception {
-        mockMvc.perform(get("/accounts/" + NON_EXISTENT_ID)
-                        .with(adminJwt()))
+    void getNonExistentAccountReturnsNotFound() throws Exception {
+        mockMvc.perform(
+                        get("/accounts/{accountId}", NON_EXISTENT_ID)
+                                .with(adminJwt())
+                )
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message", containsString(String.valueOf(NON_EXISTENT_ID))));
+                .andExpect(
+                        jsonPath(
+                                "$.message",
+                                containsString(
+                                        String.valueOf(NON_EXISTENT_ID)
+                                )
+                        )
+                );
     }
 
     @Test
     @DisplayName("Should reject duplicate email for a different account owner")
-    void createAccount_duplicateEmail() throws Exception {
+    void createAccountWithDuplicateEmailReturnsConflict()
+            throws Exception {
         String existingOwnerSubject =
                 "22222222-2222-2222-2222-222222222222";
 
-        Account existing = accountRepository.save(
+        Account existingAccount = accountRepository.save(
                 new Account(
                         existingOwnerSubject,
                         NAME,
@@ -198,62 +277,82 @@ class AccountIntegrationTest {
                 EMAIL,
                 "+375291234568",
                 List.of(
-                        new CreateBillRequestDTO(
-                                BigDecimal.ZERO,
-                                false
-                        )
+                        new CreateBillRequestDTO(ZERO_BALANCE, false)
                 )
         );
 
-        mockMvc.perform(post("/accounts")
-                        .with(adminJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        mockMvc.perform(
+                        post("/accounts")
+                                .with(adminJwt())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(request)
+                                )
+                )
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
 
-        assertThat(accountRepository.count()).isEqualTo(countBeforeRequest);
+        assertThat(accountRepository.count())
+                .isEqualTo(countBeforeRequest);
 
         assertThat(accountRepository.findByOwnerSubject(OWNER_SUB))
                 .isEmpty();
 
-        Account unchanged = accountRepository.findById(
-                existing.getAccountId()
-        ).orElseThrow();
+        Account unchangedAccount = accountRepository.findById(
+                        existingAccount.getAccountId()
+                )
+                .orElseThrow();
 
-        assertThat(unchanged.getOwnerSubject())
+        assertThat(unchangedAccount.getOwnerSubject())
                 .isEqualTo(existingOwnerSubject);
-        assertThat(unchanged.getEmail()).isEqualTo(EMAIL);
+        assertThat(unchangedAccount.getEmail())
+                .isEqualTo(EMAIL);
     }
 
     @Test
     @DisplayName("Account physical deletion is not exposed")
-    void deleteAccount_methodNotAllowed() throws Exception {
-        Account saved = accountRepository.save(
-                new Account(OWNER_SUB, NAME, EMAIL, PHONE, DEFAULT_TIME)
+    void deleteAccountMethodNotAllowed() throws Exception {
+        Account savedAccount = accountRepository.save(
+                new Account(
+                        OWNER_SUB,
+                        NAME,
+                        EMAIL,
+                        PHONE,
+                        DEFAULT_TIME
+                )
         );
 
-        mockMvc.perform(delete("/accounts/{id}", saved.getAccountId())
-                        .with(adminJwt()))
+        mockMvc.perform(
+                        delete(
+                                "/accounts/{accountId}",
+                                savedAccount.getAccountId()
+                        )
+                                .with(adminJwt())
+                )
                 .andExpect(status().isMethodNotAllowed());
 
-        assertThat(accountRepository.existsById(saved.getAccountId())).isTrue();
+        assertThat(
+                accountRepository.existsById(savedAccount.getAccountId())
+        ).isTrue();
     }
 
     @Test
     @DisplayName("Should return 400 when creating account with invalid input")
-    void createAccount_invalidInput() throws Exception {
+    void createAccountWithInvalidInputReturnsBadRequest()
+            throws Exception {
         String invalidJson = """
-            {
-                "email": "24вым2",
-                "phone": ""
-            }
-        """;
+                {
+                    "email": "invalid-email",
+                    "phone": ""
+                }
+                """;
 
-        mockMvc.perform(post("/accounts")
-                        .with(adminJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidJson))
+        mockMvc.perform(
+                        post("/accounts")
+                                .with(adminJwt())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(invalidJson)
+                )
                 .andExpect(status().isBadRequest());
     }
 }
