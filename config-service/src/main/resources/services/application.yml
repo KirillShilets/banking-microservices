@@ -20,11 +20,12 @@ spring:
     serialization:
       write-dates-as-timestamps: false
   rabbitmq:
-    host: ${RABBITMQ_HOST:rabbitmq}
+    host: ${RABBITMQ_HOST}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:bankmq}
-    password: ${RABBITMQ_PASSWORD:bankmqpass}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
     publisher-confirm-type: correlated
+    publisher-confirm-timeout: ${RABBITMQ_PUBLISHER_CONFIRM_TIMEOUT:5s}
     publisher-returns: true
     listener:
       simple:

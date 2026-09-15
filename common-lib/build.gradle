@@ -25,6 +25,7 @@ dependencyManagement {
 dependencies {
     api 'org.springframework:spring-webmvc'
 
+    compileOnly 'org.projectlombok:lombok'
     compileOnlyApi 'jakarta.servlet:jakarta.servlet-api'
 
     api 'org.springframework.boot:spring-boot-starter-json'

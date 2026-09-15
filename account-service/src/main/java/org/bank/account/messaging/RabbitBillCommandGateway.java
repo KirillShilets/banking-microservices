@@ -1,27 +1,27 @@
 package org.bank.account.messaging;
 
 import lombok.RequiredArgsConstructor;
-import org.bank.dto.request.CreateBillRequestDTO;
+import org.bank.messaging.RabbitCommandPublisher;
 import org.bank.messaging.RabbitTopology;
 import org.bank.messaging.dto.CreateBillsCommandDTO;
-import org.bank.messaging.dto.DeleteBillsByAccountCommandDTO;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
 public class RabbitBillCommandGateway implements BillCommandGateway {
 
-    private final RabbitTemplate rabbitTemplate;
+    private final RabbitCommandPublisher commandPublisher;
 
     @Override
-    public void createBillsForAccount(Long accountId, List<CreateBillRequestDTO> bills) {
-        rabbitTemplate.convertAndSend(
+    public void createBillsForAccount(CreateBillsCommandDTO command) {
+        Objects.requireNonNull(command, "Create-bills command must not be null");
+
+        commandPublisher.publish(
                 RabbitTopology.INTERNAL_EXCHANGE,
                 RabbitTopology.BILL_CREATE_FOR_ACCOUNT_ROUTING_KEY,
-                new CreateBillsCommandDTO(accountId, bills)
+                command
         );
     }
 }

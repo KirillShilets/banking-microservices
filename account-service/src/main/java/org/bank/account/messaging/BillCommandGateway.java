@@ -1,9 +1,7 @@
 package org.bank.account.messaging;
 
-import org.bank.dto.request.CreateBillRequestDTO;
-
-import java.util.List;
+import org.bank.messaging.dto.CreateBillsCommandDTO;
 
 public interface BillCommandGateway {
-    void createBillsForAccount(Long accountId, List<CreateBillRequestDTO> bills);
+    void createBillsForAccount(CreateBillsCommandDTO command);
 }
