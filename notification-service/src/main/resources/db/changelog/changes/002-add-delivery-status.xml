@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
+
+    <changeSet id="002-add-delivery-status" author="Kirill Shilets">
+        <addColumn tableName="notification_deliveries">
+            <column
+                    name="status"
+                    type="VARCHAR(16)"/>
+            <column
+                    name="created_at"
+                    type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+
+        <sql>
+            UPDATE notification_deliveries
+            SET
+                status = 'SENT',
+                created_at = sent_at
+            WHERE status IS NULL
+               OR created_at IS NULL;
+        </sql>
+
+        <addNotNullConstraint
+                tableName="notification_deliveries"
+                columnName="status"
+                columnDataType="VARCHAR(16)"/>
+
+        <addNotNullConstraint
+                tableName="notification_deliveries"
+                columnName="created_at"
+                columnDataType="TIMESTAMP WITH TIME ZONE"/>
+
+        <dropNotNullConstraint
+                tableName="notification_deliveries"
+                columnName="sent_at"
+                columnDataType="TIMESTAMP WITH TIME ZONE"/>
+
+    </changeSet>
+</databaseChangeLog>

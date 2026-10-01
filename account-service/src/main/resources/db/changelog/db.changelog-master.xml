@@ -8,5 +8,6 @@
     <include file="db/changelog/changes/001-create-accounts-table.xml"/>
     <include file="db/changelog/changes/002-add-owner-subject.xml"/>
     <include file="db/changelog/changes/003-create-outbox-table.xml"/>
+    <include file="db/changelog/changes/004-add-next-attempt-at.xml"/>
 
 </databaseChangeLog>

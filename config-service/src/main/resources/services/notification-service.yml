@@ -6,8 +6,8 @@ spring:
     name: notification-service
   datasource:
     url: jdbc:postgresql://postgres:5432/notification_service_database
-    username: ${NOTIFICATION_DB_USER:notification_service_admin}
-    password: ${NOTIFICATION_DB_PASSWORD:notificationserviceadmin}
+    username: ${NOTIFICATION_DB_USER}
+    password: ${NOTIFICATION_DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate

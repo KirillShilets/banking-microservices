@@ -30,6 +30,7 @@ public class OutboxService {
                     .payload(objectMapper.writeValueAsString(payload))
                     .status(OutboxStatus.PENDING)
                     .retryCount(0)
+                    .nextAttemptAt(OffsetDateTime.now())
                     .createdAt(OffsetDateTime.now())
                     .build());
         } catch (JsonProcessingException ex) {

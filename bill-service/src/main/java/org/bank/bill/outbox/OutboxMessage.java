@@ -50,6 +50,9 @@ public class OutboxMessage {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Column(name = "next_attempt_at", nullable = false)
+    private OffsetDateTime nextAttemptAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
