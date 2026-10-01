@@ -11,7 +11,8 @@ public interface OutboxRepository extends JpaRepository<OutboxMessage, UUID> {
 
     @Query(value = """
             SELECT * FROM outbox
-            WHERE status = 'PENDING'
+            WHERE status = 'PENDING' 
+                AND next_attempt_at <= CURRENT_TIMESTAMP
             ORDER BY created_at ASC
             LIMIT :limit
             FOR UPDATE SKIP LOCKED

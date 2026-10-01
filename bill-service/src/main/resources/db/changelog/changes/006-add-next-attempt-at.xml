@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
+
+    <changeSet id="006-add-next-attempt-at" author="Kirill Shilets">
+
+        <addColumn tableName="outbox">
+            <column
+                    name="next_attempt_at"
+                    type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+
+        <sql>
+            UPDATE outbox
+            SET next_attempt_at = created_at
+            WHERE next_attempt_at IS NULL;
+        </sql>
+
+        <addNotNullConstraint
+                tableName="outbox"
+                columnName="next_attempt_at"
+                columnDataType="TIMESTAMP WITH TIME ZONE"/>
+
+        <sql>
+            CREATE INDEX idx_bill_outbox_due
+                ON outbox (next_attempt_at)
+                WHERE status = 'PENDING';
+        </sql>
+
+    </changeSet>
+
+</databaseChangeLog>

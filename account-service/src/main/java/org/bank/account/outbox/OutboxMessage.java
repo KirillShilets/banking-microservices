@@ -47,6 +47,9 @@ public class OutboxMessage {
     @Column(name = "retry_count", nullable = false)
     private int retryCount;
 
+    @Column(name = "next_attempt_at", nullable = false)
+    private OffsetDateTime nextAttemptAt;
+
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 

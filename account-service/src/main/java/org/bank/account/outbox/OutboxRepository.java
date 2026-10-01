@@ -21,6 +21,7 @@ public interface OutboxRepository extends JpaRepository<OutboxMessage, UUID> {
             SELECT message.id
             FROM OutboxMessage message
             WHERE message.status = :status
+              AND message.nextAttemptAt <= CURRENT_TIMESTAMP
             ORDER BY message.createdAt ASC
             """)
     List<UUID> findIdsByStatus(

@@ -6,4 +6,5 @@
         https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
 
     <include file="db/changelog/changes/001-create-notification-deliveries-table.xml"/>
+    <include file="db/changelog/changes/002-add-delivery-status.xml"/>
 </databaseChangeLog>
