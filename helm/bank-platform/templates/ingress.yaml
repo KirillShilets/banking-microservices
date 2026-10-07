@@ -1,0 +1,43 @@
+{{- $root := . }}
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled $svc.ingress.enabled }}
+{{- $port := index $root.Values.servicePorts $name }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "bank-platform.serviceLabels" (dict "name" $name "svc" $svc "root" $root) | nindent 4 }}
+  {{- $annotations := mergeOverwrite (deepCopy ($root.Values.ingress.annotations | default dict)) ($svc.ingress.annotations | default dict) }}
+  {{- if $annotations }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+  {{- end }}
+spec:
+  {{- $className := $svc.ingress.className | default $root.Values.ingress.className }}
+  {{- if $className }}
+  ingressClassName: {{ $className }}
+  {{- end }}
+  {{- with $svc.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range $svc.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ $name }}
+                port:
+                  number: {{ $port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

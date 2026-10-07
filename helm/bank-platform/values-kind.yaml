@@ -1,0 +1,76 @@
+global:
+  environment: kind
+  imageRegistry: ""
+  topologySpreadConstraints:
+    enabled: false
+
+external:
+  keycloakHost: "HOST_IP"
+  rabbitmqHost: "HOST_IP"
+
+pdb:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+resources:
+  spring:
+    requests:
+      cpu: 500m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  gateway:
+    requests:
+      cpu: 500m
+      memory: 448Mi
+    limits:
+      cpu: 500m
+      memory: 448Mi
+  frontend:
+    requests:
+      cpu: 10m
+      memory: 24Mi
+    limits:
+      cpu: 100m
+      memory: 24Mi
+
+serviceMonitor:
+  enabled: false
+
+services:
+  config-service:
+    replicas: 1
+
+  discovery-service:
+    replicas: 1
+
+  account-service:
+    replicas: 1
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://HOST_IP:5433/account_service_database"
+
+  bill-service:
+    replicas: 1
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://HOST_IP:5433/bill_service_database"
+      APP_SANDBOX_DEPOSITS_ENABLED: "true"
+
+  deposit-service:
+    replicas: 1
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://HOST_IP:5433/deposit_service_database"
+
+  notification-service:
+    replicas: 1
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://HOST_IP:5433/notification_service_database"
+      MAIL_HOST: "smtp.gmail.com"
+
+  gateway-service:
+    replicas: 1
+
+  frontend:
+    replicas: 1

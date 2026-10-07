@@ -1,0 +1,16 @@
+fix(docker): exec the JVM so it becomes PID 1 and receives SIGTERM
+
+ENTRYPOINT was ["sh","-c","java $JAVA_OPTS -jar app.jar"], which leaves the
+shell as PID 1 with the JVM as a child. A shell does not forward SIGTERM to
+its children, so the JVM never observed the signal: docker stop and
+kubectl delete pod both waited out the full grace period and then sent
+SIGKILL, producing exit code 137.
+
+With exec the JVM replaces the shell and becomes PID 1. Spring Boot 3.4
+enables graceful shutdown by default (server.shutdown=graceful), so no
+property change is needed for the context to drain connections and close
+AMQP consumers.
+
+Applied to all seven JVM services in one change: they share the same
+ENTRYPOINT pattern, and leaving any of them behind would keep the same bug
+in a different service.
