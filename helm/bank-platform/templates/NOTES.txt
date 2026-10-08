@@ -1,0 +1,29 @@
+Release "{{ .Release.Name }}" deployed to namespace "{{ .Release.Namespace }}"
+(environment: {{ .Values.global.environment }}, revision {{ .Release.Revision }}).
+
+Watch the rollout:
+  kubectl get pods -n {{ .Release.Namespace }} -w
+
+Public endpoints:
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled $svc.ingress $svc.ingress.enabled }}
+{{- range $svc.ingress.hosts }}
+  {{ $name }}: http{{ if $svc.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- $ext := list }}
+{{- range $name, $e := .Values.externalServices }}
+{{- if $e.enabled }}{{ $ext = append $ext (printf "%s -> %s:%v" $name $e.ip $e.targetPort) }}{{ end }}
+{{- end }}
+{{- if $ext }}
+
+External dependencies routed through in-cluster Services:
+{{- range $ext }}
+  {{ . }}
+{{- end }}
+{{- end }}
+
+Smoke test:
+  powershell -ExecutionPolicy Bypass -File deploy/scripts/verify-deployment.ps1

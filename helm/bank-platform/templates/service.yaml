@@ -1,0 +1,27 @@
+{{- $root := . }}
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled $svc.service.enabled }}
+{{- $port := index $root.Values.servicePorts $name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "bank-platform.serviceLabels" (dict "name" $name "svc" $svc "root" $root) | nindent 4 }}
+  {{- with $svc.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $svc.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ $port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "bank-platform.selectorLabels" (dict "name" $name "root" $root) | nindent 4 }}
+{{- end }}
+{{- end }}

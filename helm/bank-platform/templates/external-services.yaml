@@ -1,0 +1,51 @@
+{{- $rendered := toYaml .Values }}
+{{- range $placeholder := list "HOST_IP" "REPLACE_ME" }}
+{{- if contains $placeholder $rendered }}
+{{- fail (printf "values still contain the placeholder %q; pass the real value with --set or an extra -f file" $placeholder) }}
+{{- end }}
+{{- end }}
+
+{{- range $name, $ext := .Values.externalServices }}
+{{- if $ext.enabled }}
+{{- $ip := toString $ext.ip }}
+{{- if not (regexMatch "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$" $ip) }}
+{{- fail (printf "externalServices.%s.ip must be an IPv4 address, got %q" $name $ip) }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/component: external
+    app.kubernetes.io/part-of: {{ $.Chart.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: tcp
+      protocol: TCP
+      port: {{ $ext.port }}
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: {{ $name }}-external
+  labels:
+    kubernetes.io/service-name: {{ $name }}
+    endpointslice.kubernetes.io/managed-by: helm
+    app.kubernetes.io/part-of: {{ $.Chart.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+addressType: IPv4
+ports:
+  - name: tcp
+    protocol: TCP
+    port: {{ $ext.targetPort }}
+endpoints:
+  - addresses:
+      - {{ $ip | quote }}
+    conditions:
+      ready: true
+{{- end }}
+{{- end }}

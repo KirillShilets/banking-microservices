@@ -1,0 +1,45 @@
+server:
+  port: 8989
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+              lower-case-service-id: true
+          routes:
+            - id: account_service_route
+              uri: lb://account-service
+              predicates:
+                - Path=/accounts/**
+            - id: bill_service_route
+              uri: lb://bill-service
+              predicates:
+                - Path=/bills/**
+            - id: deposit_service_route
+              uri: lb://deposit-service
+              predicates:
+                - Path=/deposits/**
+          httpclient:
+            wiretap: false
+          httpserver:
+            wiretap: false
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins:
+                  - "http://localhost:5173"
+                  - "http://localhost:3000"
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - DELETE
+                  - OPTIONS
+                allowedHeaders: "*"
+                allowCredentials: true

@@ -1,0 +1,424 @@
+global:
+  environment: kind
+  imageRegistry: ""
+  existingSecret: "bank-app-secrets"
+  imagePullSecrets: []
+  hostAliases: []
+  keycloak:
+    issuerUri: "http://keycloak.localhost:8080/realms/bank-realm"
+    jwkSetUri: ""
+  eurekaDefaultZone: ""
+  external:
+    keycloakHost: "keycloak.localhost"
+    rabbitmqHost: "rabbitmq"
+    rabbitmqPort: 5672
+  lifecycle:
+    terminationGracePeriodSeconds: 60
+    preStopSleepSeconds: 8
+  qosGuaranteed: true
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+  topologySpreadConstraints:
+    enabled: true
+    whenUnsatisfiable: ScheduleAnyway
+  podAnnotations: {}
+  podLabels: {}
+  extraEnv:
+    - name: SPRING_SECURITY_USER_NAME
+      valueFrom:
+        secretKeyRef:
+          name: bank-app-secrets
+          key: SPRING_SECURITY_USER_NAME
+    - name: SPRING_SECURITY_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: bank-app-secrets
+          key: SPRING_SECURITY_PASSWORD
+
+externalServices:
+  postgres:
+    enabled: false
+    port: 5432
+    ip: ""
+    targetPort: 5432
+  rabbitmq:
+    enabled: false
+    port: 5672
+    ip: ""
+    targetPort: 5672
+
+serviceAccount:
+  annotations: {}
+  automountServiceAccountToken: false
+
+fullnameOverride: bank
+
+servicePorts:
+  config-service: 8001
+  discovery-service: 8761
+  account-service: 8081
+  bill-service: 8082
+  deposit-service: 8083
+  notification-service: 9999
+  gateway-service: 8989
+  frontend: 80
+
+probes:
+  startup:
+    enabled: true
+    path: /actuator/health/liveness
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+    successThreshold: 1
+  readiness:
+    enabled: true
+    path: /actuator/health/readiness
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+  liveness:
+    enabled: true
+    path: /actuator/health/liveness
+    initialDelaySeconds: 0
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+
+resources:
+  spring:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  gateway:
+    requests:
+      cpu: 250m
+      memory: 640Mi
+    limits:
+      cpu: "1"
+      memory: 640Mi
+  frontend:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 32Mi
+
+configServer:
+  enabled: true
+  mountPath: /app/config
+
+liquibase:
+  migrationJob:
+    enabled: false
+    useService: config-service
+    activeDeadlineSeconds: 900
+    backoffLimit: 1
+    ttlSecondsAfterFinished: 3600
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+networkPolicy:
+  enabled: true
+  ingressControllerNamespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: ingress-nginx
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+
+services:
+  config-service:
+    enabled: true
+    component: platform
+    replicas: 1
+    image:
+      repository: bank/config-service
+      tag: ""
+      digest: ""
+      pullPolicy: ""
+    containerPort: 8001
+    env: {}
+    envFromSecret: []
+    envOverrides:
+      SPRING_CONFIG_IMPORT: "optional:classpath:/"
+    resources: {}
+    probes: {}
+    podDisruptionBudget:
+      enabled: false
+    service:
+      enabled: true
+      type: ClusterIP
+      annotations: {}
+    ingress:
+      enabled: false
+
+  discovery-service:
+    enabled: true
+    component: platform
+    replicas: 1
+    image:
+      repository: bank/discovery-service
+    containerPort: 8761
+    env: {}
+    resources: {}
+    probes:
+      readiness:
+        initialDelaySeconds: 10
+    podDisruptionBudget:
+      enabled: false
+    service:
+      enabled: true
+      type: ClusterIP
+    ingress:
+      enabled: false
+
+  account-service:
+    enabled: true
+    component: backend
+    replicas: 2
+    image:
+      repository: bank/account-service
+    containerPort: 8081
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/account_service_database"
+    extraEnv:
+      - name: SPRING_DATASOURCE_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: ACCOUNT_DB_USER
+      - name: SPRING_DATASOURCE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: ACCOUNT_DB_PASSWORD
+      - name: RABBITMQ_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: RABBITMQ_USERNAME
+      - name: RABBITMQ_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: RABBITMQ_PASSWORD
+    service:
+      enabled: true
+      type: ClusterIP
+    ingress:
+      enabled: false
+
+  bill-service:
+    enabled: true
+    component: backend
+    replicas: 2
+    image:
+      repository: bank/bill-service
+    containerPort: 8082
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/bill_service_database"
+      APP_SANDBOX_DEPOSITS_ENABLED: "false"
+      DEPOSIT_MIN_AMOUNT: "10.00"
+    extraEnv:
+      - name: SPRING_DATASOURCE_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: BILL_DB_USER
+      - name: SPRING_DATASOURCE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: BILL_DB_PASSWORD
+      - name: RABBITMQ_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: RABBITMQ_USERNAME
+      - name: RABBITMQ_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: RABBITMQ_PASSWORD
+    service:
+      enabled: true
+      type: ClusterIP
+    ingress:
+      enabled: false
+
+  deposit-service:
+    enabled: true
+    component: backend
+    replicas: 2
+    image:
+      repository: bank/deposit-service
+    containerPort: 8083
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/deposit_service_database"
+    extraEnv:
+      - name: SPRING_DATASOURCE_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: DEPOSIT_DB_USER
+      - name: SPRING_DATASOURCE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: DEPOSIT_DB_PASSWORD
+      - name: RABBITMQ_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: RABBITMQ_USERNAME
+      - name: RABBITMQ_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: RABBITMQ_PASSWORD
+    service:
+      enabled: true
+      type: ClusterIP
+    ingress:
+      enabled: false
+
+  notification-service:
+    enabled: true
+    component: backend
+    replicas: 1
+    image:
+      repository: bank/notification-service
+    containerPort: 9999
+    env:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/notification_service_database"
+    envFromSecret:
+      - MAIL_PASSWORD
+    extraEnv:
+      - name: SPRING_DATASOURCE_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: NOTIFICATION_DB_USER
+      - name: SPRING_DATASOURCE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: NOTIFICATION_DB_PASSWORD
+      - name: RABBITMQ_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: RABBITMQ_USERNAME
+      - name: RABBITMQ_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: RABBITMQ_PASSWORD
+      - name: MAIL_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: MAIL_USERNAME
+      - name: MANAGEMENT_HEALTH_MAIL_ENABLED
+        value: "false"
+    podDisruptionBudget:
+      enabled: false
+    service:
+      enabled: true
+      type: ClusterIP
+    ingress:
+      enabled: false
+
+  gateway-service:
+    enabled: true
+    component: edge
+    replicas: 2
+    image:
+      repository: bank/gateway-service
+    containerPort: 8989
+    env: {}
+    service:
+      enabled: true
+      type: ClusterIP
+    ingress:
+      enabled: true
+      className: nginx
+      annotations: {}
+      hosts:
+        - host: api.bank.local
+          paths:
+            - path: /
+              pathType: Prefix
+      tls: []
+
+  frontend:
+    enabled: true
+    component: edge
+    replicas: 2
+    image:
+      repository: bank/frontend
+    containerPort: 80
+    env: {}
+    extraVolumeMounts:
+      - name: nginx-cache
+        mountPath: /var/cache/nginx
+      - name: nginx-run
+        mountPath: /var/run
+    extraVolumes:
+      - name: nginx-cache
+        emptyDir:
+          sizeLimit: 64Mi
+      - name: nginx-run
+        emptyDir:
+          sizeLimit: 8Mi
+    resources: {}
+    probes:
+      startup:
+        enabled: false
+      readiness:
+        path: /
+      liveness:
+        path: /
+    service:
+      enabled: true
+      type: ClusterIP
+    ingress:
+      enabled: true
+      className: nginx
+      annotations: {}
+      hosts:
+        - host: app.bank.local
+          paths:
+            - path: /
+              pathType: Prefix
+      tls: []
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  tls: []

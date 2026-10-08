@@ -63,6 +63,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
+    ports:
+      - "0.0.0.0:${POSTGRES_EXTERNAL_PORT:-5433}:5432"
     networks:
       - bank-net
     healthcheck:
@@ -78,8 +80,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?RABBITMQ_USERNAME must be set}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set}
     ports:
-      - "${RABBITMQ_EXTERNAL_PORT:-5672}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "0.0.0.0:${RABBITMQ_EXTERNAL_PORT:-5672}:5672"
+      - "0.0.0.0:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     networks:
       - bank-net
     healthcheck:

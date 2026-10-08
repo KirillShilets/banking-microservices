@@ -1,0 +1,208 @@
+{{- include "bank-platform.validateServices" . }}
+{{- $root := . }}
+{{- $hostAliases := include "bank-platform.hostAliases" . }}
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+{{- $port := index $root.Values.servicePorts $name }}
+{{- $probes := include "bank-platform.probes" (dict "name" $name "svc" $svc "root" $root) | fromYaml }}
+{{- $resources := include "bank-platform.resources" (dict "name" $name "svc" $svc "root" $root) | fromYaml }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "bank-platform.serviceLabels" (dict "name" $name "svc" $svc "root" $root) | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "bank-platform.selectorLabels" (dict "name" $name "root" $root) | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "bank-platform.serviceLabels" (dict "name" $name "svc" $svc "root" $root) | nindent 8 }}
+        {{- with $root.Values.global.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap-config-server.yaml") $root | sha256sum }}
+        {{- with $root.Values.global.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "bank-platform.fullname" $root }}
+      automountServiceAccountToken: {{ $root.Values.serviceAccount.automountServiceAccountToken }}
+      enableServiceLinks: false
+      {{- with $root.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ $root.Values.global.lifecycle.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- toYaml $root.Values.global.securityContext | nindent 8 }}
+      {{- if $hostAliases }}
+      hostAliases:
+        {{- $hostAliases | nindent 8 }}
+      {{- end }}
+      {{- if $root.Values.global.topologySpreadConstraints.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: {{ $root.Values.global.topologySpreadConstraints.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "bank-platform.selectorLabels" (dict "name" $name "root" $root) | nindent 14 }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "bank-platform.image" (dict "name" $name "svc" $svc "root" $root) | quote }}
+          imagePullPolicy: {{ include "bank-platform.imagePullPolicy" (dict "svc" $svc "root" $root) }}
+          securityContext:
+            {{- toYaml $root.Values.global.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $port }}
+              protocol: TCP
+          env:
+            {{- with $root.Values.global.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            - name: ENVIRONMENT
+              value: {{ $root.Values.global.environment | quote }}
+            {{- if ne $name "config-service" }}
+            - name: SPRING_PROFILES_ACTIVE
+              value: "native"
+            - name: SPRING_CONFIG_IMPORT
+              value: {{ printf "configserver:http://$(SPRING_SECURITY_USER_NAME):$(SPRING_SECURITY_PASSWORD)@config-service:%v" (index $root.Values.servicePorts "config-service") | quote }}
+            {{- end }}
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+              value: {{ $root.Values.global.keycloak.issuerUri | quote }}
+            {{- if $root.Values.global.keycloak.jwkSetUri }}
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI
+              value: {{ $root.Values.global.keycloak.jwkSetUri | quote }}
+            {{- end }}
+            {{- if $root.Values.global.eurekaDefaultZone }}
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: {{ $root.Values.global.eurekaDefaultZone | quote }}
+            {{- end }}
+            {{- if $root.Values.global.external.rabbitmqHost }}
+            - name: RABBITMQ_HOST
+              value: {{ $root.Values.global.external.rabbitmqHost | quote }}
+            - name: RABBITMQ_PORT
+              value: {{ $root.Values.global.external.rabbitmqPort | default 5672 | quote }}
+            {{- end }}
+            {{- if and (eq $name "config-service") $root.Values.configServer.enabled }}
+            - name: SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS
+              value: {{ printf "file:%s/" $root.Values.configServer.mountPath | quote }}
+            {{- end }}
+            {{- if $root.Values.liquibase.migrationJob.enabled }}
+            - name: SPRING_LIQUIBASE_ENABLED
+              value: "false"
+            {{- end }}
+            {{- range $key, $value := $svc.env }}
+            {{- if ne (toString $value) "" }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with $svc.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- range $key := ($svc.envFromSecret | default list) }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bank-platform.secretName" $root }}
+                  key: {{ $key }}
+            {{- end }}
+            {{- range $key, $value := ($svc.envOverrides | default dict) }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- if $probes.startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ $probes.startup.path }}
+              port: http
+            initialDelaySeconds: {{ $probes.startup.initialDelaySeconds }}
+            periodSeconds: {{ $probes.startup.periodSeconds }}
+            timeoutSeconds: {{ $probes.startup.timeoutSeconds }}
+            failureThreshold: {{ $probes.startup.failureThreshold }}
+            successThreshold: {{ $probes.startup.successThreshold }}
+          {{- end }}
+          {{- if $probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ $probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ $probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ $probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ $probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ $probes.readiness.failureThreshold }}
+            successThreshold: {{ $probes.readiness.successThreshold }}
+          {{- end }}
+          {{- if $probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ $probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ $probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ $probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ $probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ $probes.liveness.failureThreshold }}
+            successThreshold: {{ $probes.liveness.successThreshold }}
+          {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                # Gives the Service controller and kube-proxy time to remove this
+                # pod from Endpoints before the JVM starts draining. Without it a
+                # rollout produces a deterministic burst of 502s.
+                command: ["/bin/sh", "-c", "sleep {{ $root.Values.global.lifecycle.preStopSleepSeconds }}"]
+          {{- if $root.Values.global.qosGuaranteed }}
+          resources:
+            requests:
+              cpu: {{ $resources.requests.cpu | quote }}
+              memory: {{ $resources.requests.memory | quote }}
+            limits:
+              cpu: {{ $resources.requests.cpu | quote }}
+              memory: {{ $resources.requests.memory | quote }}
+          {{- else }}
+          resources:
+            {{- toYaml (pick $resources "requests" "limits") | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if and (eq $name "config-service") $root.Values.configServer.enabled }}
+            - name: config-server-content
+              mountPath: {{ $root.Values.configServer.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- with $svc.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+        {{- if and (eq $name "config-service") $root.Values.configServer.enabled }}
+        - name: config-server-content
+          configMap:
+            name: {{ printf "%s-config-server" (include "bank-platform.fullname" $root) }}
+            defaultMode: 0444
+        {{- end }}
+        {{- with $svc.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}
+{{- end }}

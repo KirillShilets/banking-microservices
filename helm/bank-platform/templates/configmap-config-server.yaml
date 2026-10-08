@@ -1,0 +1,21 @@
+{{- if .Values.configServer.enabled }}
+{{- $path := "config/config-service/src/main/resources/services" }}
+{{- $files := .Files.Glob (printf "%s/*" $path) }}
+{{- if not $files }}
+{{- fail (printf "configServer.enabled is true but no configuration files were found at %s/ inside the chart. Run deploy/scripts/sync-config.ps1, or set configServer.enabled=false." $path) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-config-server" (include "bank-platform.fullname" .) }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "bank-platform.labels" . | nindent 4 }}
+  annotations:
+    config.bank.io/sync-source: {{ $path | quote }}
+data:
+    {{- range $path, $bytes := $files }}
+  {{ base $path }}: |
+    {{- $bytes | toString | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: bank-platform
+description: Spring Cloud Banking System application tier (frontend, gateway, business services)
+type: application
+version: 1.0.0
+appVersion: "1.0-SNAPSHOT"
+kubeVersion: ">=1.28.0-0"
+keywords:
+  - banking
+  - spring-boot
+  - microservices
+maintainers:
+  - name: KirillShilets
+annotations:
+  category: Banking

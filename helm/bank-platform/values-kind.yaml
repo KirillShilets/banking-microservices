@@ -1,0 +1,71 @@
+global:
+  environment: kind
+  imageRegistry: ""
+  topologySpreadConstraints:
+    enabled: false
+
+externalServices:
+  postgres:
+    enabled: true
+    targetPort: 5433
+  rabbitmq:
+    enabled: true
+
+probes:
+  startup:
+    failureThreshold: 60
+
+pdb:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+resources:
+  spring:
+    requests:
+      cpu: 500m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  gateway:
+    requests:
+      cpu: 500m
+      memory: 448Mi
+    limits:
+      cpu: 500m
+      memory: 448Mi
+  frontend:
+    requests:
+      cpu: 10m
+      memory: 24Mi
+    limits:
+      cpu: 100m
+      memory: 24Mi
+
+serviceMonitor:
+  enabled: false
+
+services:
+  config-service:
+    replicas: 1
+  discovery-service:
+    replicas: 1
+  account-service:
+    replicas: 1
+  bill-service:
+    replicas: 1
+    env:
+      APP_SANDBOX_DEPOSITS_ENABLED: "true"
+  deposit-service:
+    replicas: 1
+  notification-service:
+    replicas: 1
+    env:
+      MAIL_HOST: "smtp.gmail.com"
+      MAIL_PORT: "587"
+  gateway-service:
+    replicas: 1
+  frontend:
+    replicas: 1
