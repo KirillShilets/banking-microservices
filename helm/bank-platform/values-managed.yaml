@@ -4,13 +4,19 @@ global:
   existingSecret: "bank-app-secrets"
   keycloak:
     issuerUri: "https://auth.bank.example.com/realms/bank-realm"
+  external:
+    keycloakHost: "auth.bank.example.com"
+    rabbitmqHost: "b-xxxx.mq.eu-central-1.amazonaws.com"
+    rabbitmqPort: 5671
   topologySpreadConstraints:
     enabled: true
     whenUnsatisfiable: DoNotSchedule
 
-external:
-  keycloakHost: "auth.bank.example.com"
-  rabbitmqHost: "b-xxxx.mq.eu-central-1.amazonaws.com"
+externalServices:
+  postgres:
+    enabled: false
+  rabbitmq:
+    enabled: false
 
 liquibase:
   migrationJob:
@@ -51,7 +57,6 @@ resources:
 services:
   config-service:
     replicas: 2
-
   discovery-service:
     replicas: 2
 
@@ -59,9 +64,7 @@ services:
     replicas: 3
     env:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://bank-prod.cluster-xxxx.eu-central-1.rds.amazonaws.com:5432/account_service_database?sslmode=verify-full"
-      SPRING_DATASOURCE_USERNAME: "account_service_admin"
-      RABBITMQ_HOST: "b-xxxx.mq.eu-central-1.amazonaws.com"
-      RABBITMQ_PORT: "5671"
+      SPRING_RABBITMQ_SSL_ENABLED: "true"
     podDisruptionBudget:
       enabled: true
       maxUnavailable: 1
@@ -70,9 +73,7 @@ services:
     replicas: 3
     env:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://bank-prod.cluster-xxxx.eu-central-1.rds.amazonaws.com:5432/bill_service_database?sslmode=verify-full"
-      SPRING_DATASOURCE_USERNAME: "bill_service_admin"
-      RABBITMQ_HOST: "b-xxxx.mq.eu-central-1.amazonaws.com"
-      RABBITMQ_PORT: "5671"
+      SPRING_RABBITMQ_SSL_ENABLED: "true"
       APP_SANDBOX_DEPOSITS_ENABLED: "false"
       DEPOSIT_MIN_AMOUNT: "10.00"
     podDisruptionBudget:
@@ -83,9 +84,7 @@ services:
     replicas: 3
     env:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://bank-prod.cluster-xxxx.eu-central-1.rds.amazonaws.com:5432/deposit_service_database?sslmode=verify-full"
-      SPRING_DATASOURCE_USERNAME: "deposit_service_admin"
-      RABBITMQ_HOST: "b-xxxx.mq.eu-central-1.amazonaws.com"
-      RABBITMQ_PORT: "5671"
+      SPRING_RABBITMQ_SSL_ENABLED: "true"
     podDisruptionBudget:
       enabled: true
       maxUnavailable: 1
@@ -94,12 +93,9 @@ services:
     replicas: 1
     env:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://bank-prod.cluster-xxxx.eu-central-1.rds.amazonaws.com:5432/notification_service_database?sslmode=verify-full"
-      SPRING_DATASOURCE_USERNAME: "notification_service_admin"
-      RABBITMQ_HOST: "b-xxxx.mq.eu-central-1.amazonaws.com"
-      RABBITMQ_PORT: "5671"
+      SPRING_RABBITMQ_SSL_ENABLED: "true"
       MAIL_HOST: "smtp.eu.mailgun.org"
       MAIL_PORT: "587"
-      MAIL_USERNAME: "bank-notifications@bank.example.com"
 
   gateway-service:
     replicas: 3
@@ -108,7 +104,7 @@ services:
       annotations:
         alb.ingress.kubernetes.io/scheme: internet-facing
         alb.ingress.kubernetes.io/target-type: ip
-        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443]'
         alb.ingress.kubernetes.io/ssl-redirect: "443"
       hosts:
         - host: api.bank.example.com
@@ -130,7 +126,7 @@ services:
       annotations:
         alb.ingress.kubernetes.io/scheme: internet-facing
         alb.ingress.kubernetes.io/target-type: ip
-        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443]'
         alb.ingress.kubernetes.io/ssl-redirect: "443"
       hosts:
         - host: app.bank.example.com

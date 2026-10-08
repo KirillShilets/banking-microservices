@@ -101,8 +101,8 @@ if (-not $SkipSecrets) {
         --values (Join-Path $chartPath 'values-kind.yaml') `
         --set-string "global.hostAliases[0].ip=$hostGatewayIp" `
         --set-string "global.hostAliases[0].hostnames[0]=keycloak.localhost" `
-        --set-string "external.keycloakHost=$hostGatewayIp" `
-        --set-string "external.rabbitmqHost=$hostGatewayIp" 2>&1
+        --set-string "global.external.keycloakHost=$hostGatewayIp" `
+        --set-string "global.external.rabbitmqHost=$hostGatewayIp" 2>&1
     if ($LASTEXITCODE -ne 0) { throw 'helm template failed while resolving the Secret name.' }
 
     $match = $rendered | Select-String -Pattern '^\s+name: (\S*-app-secrets)\s*$' |
@@ -125,8 +125,8 @@ Write-Host '==> Deploying the Helm release' -ForegroundColor Cyan
     --values (Join-Path $chartPath 'values-kind.yaml') `
     --set-string "global.hostAliases[0].ip=$hostGatewayIp" `
     --set-string "global.hostAliases[0].hostnames[0]=keycloak.localhost" `
-    --set-string "external.keycloakHost=$hostGatewayIp" `
-    --set-string "external.rabbitmqHost=$hostGatewayIp" `
+    --set-string "global.external.keycloakHost=$hostGatewayIp" `
+    --set-string "global.external.rabbitmqHost=$hostGatewayIp" `
     --set-string "services.account-service.env.SPRING_DATASOURCE_URL=jdbc:postgresql://${hostGatewayIp}:5433/account_service_database" `
     --set-string "services.bill-service.env.SPRING_DATASOURCE_URL=jdbc:postgresql://${hostGatewayIp}:5433/bill_service_database" `
     --set-string "services.deposit-service.env.SPRING_DATASOURCE_URL=jdbc:postgresql://${hostGatewayIp}:5433/deposit_service_database" `

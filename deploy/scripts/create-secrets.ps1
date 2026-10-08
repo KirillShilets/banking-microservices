@@ -77,6 +77,7 @@ $literals = [ordered]@{
     'RABBITMQ_USERNAME'         = Get-Required 'RABBITMQ_USERNAME'
     'RABBITMQ_PASSWORD'         = Get-Required 'RABBITMQ_PASSWORD'
 
+    'MAIL_USERNAME'             = Get-Required 'MAIL_USERNAME'
     'MAIL_PASSWORD'             = Get-Required 'MAIL_PASSWORD'
 }
 

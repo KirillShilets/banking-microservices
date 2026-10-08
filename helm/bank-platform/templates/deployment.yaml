@@ -40,6 +40,7 @@ spec:
     spec:
       serviceAccountName: {{ include "bank-platform.fullname" $root }}
       automountServiceAccountToken: {{ $root.Values.serviceAccount.automountServiceAccountToken }}
+      enableServiceLinks: false
       {{- with $root.Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -95,6 +96,8 @@ spec:
             {{- if $root.Values.global.external.rabbitmqHost }}
             - name: RABBITMQ_HOST
               value: {{ $root.Values.global.external.rabbitmqHost | quote }}
+            - name: RABBITMQ_PORT
+              value: {{ $root.Values.global.external.rabbitmqPort | default 5672 | quote }}
             {{- end }}
             {{- if and (eq $name "config-service") $root.Values.configServer.enabled }}
             - name: SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS

@@ -32,7 +32,7 @@ Write-Host '==> 2/5 Config Server content' -ForegroundColor Cyan
 $forward = Start-Job -ScriptBlock { param($ns) kubectl -n $ns port-forward svc/config-service 18001:8001 } -ArgumentList $Namespace
 Start-Sleep -Seconds 5
 try {
-    $secret = & kubectl -n $Namespace get secret "${ReleaseName}-bank-platform-app-secrets" -o json | ConvertFrom-Json
+    $secret = & kubectl -n $Namespace get secret "${ReleaseName}-app-secrets" -o json | ConvertFrom-Json
     $user = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($secret.data.SPRING_SECURITY_USER_NAME))
     $pass = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($secret.data.SPRING_SECURITY_PASSWORD))
     $auth = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("${user}:${pass}"))
