@@ -20,7 +20,7 @@ externalServices:
 
 liquibase:
   migrationJob:
-    enabled: true
+    enabled: false
 
 networkPolicy:
   enabled: true

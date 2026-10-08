@@ -30,6 +30,8 @@ host gateway. Both the browser and the pods therefore observe the same issuer.
 ## kind
 
     powershell -ExecutionPolicy Bypass -File deploy/kind/bootstrap.ps1
+    docker compose up -d postgres rabbitmq keycloak
+    powershell -ExecutionPolicy Bypass -File deploy/kind/bootstrap.ps1
 
 Add to `C:\Windows\System32\drivers\etc\hosts`:
 
@@ -40,8 +42,11 @@ Add to `C:\Windows\System32\drivers\etc\hosts`:
 
     helm upgrade --install bank ./helm/bank-platform \
       -n bank --create-namespace \
-      -f ./helm/bank-platform/values.yaml \
-      -f ./helm/bank-platform/values-managed.yaml
+      -f ./helm/bank-platform/values-managed.yaml \
+      --set global.imageRegistry=<account>.dkr.ecr.eu-central-1.amazonaws.com
+
+Replace the placeholder RDS and Amazon MQ hosts in `values-managed.yaml` first.
+Rendering fails while any `REPLACE_ME` or `HOST_IP` placeholder remains.
 
 ## Config Server content
 
@@ -64,10 +69,12 @@ CI runs the same script with `-Check` and fails if the copies diverge.
 2. `notification-service` runs with a single replica on purpose: delivery is
    at-least-once with a claim timeout, so a crash after `send()` and before the
    SENT marker can resend the email. More replicas widen that window.
-3. kindnet enforces NetworkPolicy only partially. Install Calico to validate the
-   policies for real.
-4. The Liquibase hook Job relies on Spring Boot launcher internals; verify it
-   after any Spring Boot major upgrade.
+3. PodDisruptionBudget, NetworkPolicy, ServiceMonitor and the Liquibase
+   migration Job have values but no templates yet. Until the Job exists,
+   `liquibase.migrationJob.enabled` must stay `false`, so each service runs its
+   own migrations on startup.
+4. `global.external.keycloakHost` is not read by any template; Keycloak is
+   addressed through `global.keycloak.issuerUri` and `hostAliases`.
 
 ## Troubleshooting
 

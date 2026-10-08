@@ -31,7 +31,7 @@ foreach ($entry in $requiredPorts.GetEnumerator()) {
     $reachable = Test-NetConnection -ComputerName 'localhost' -Port $entry.Value `
                                     -InformationLevel Quiet -WarningAction SilentlyContinue
     if (-not $reachable) {
-        throw "$($entry.Key) is not reachable on localhost:$($entry.Value). Run 'docker compose up -d' first."
+        throw "$($entry.Key) is not reachable on localhost:$($entry.Value). Run 'docker compose up -d postgres rabbitmq keycloak' first."
     }
     Write-Host ("    {0,-12} localhost:{1} OK" -f $entry.Key, $entry.Value) -ForegroundColor DarkGray
 }
@@ -59,6 +59,13 @@ if ($LASTEXITCODE -ne 0 -or $hostGatewayIp -notmatch '^\d{1,3}(\.\d{1,3}){3}$') 
     throw "Could not determine the docker gateway address for node '$nodeName' (got '$hostGatewayIp')."
 }
 Write-Host "==> Host gateway address: $hostGatewayIp" -ForegroundColor Cyan
+
+$kindOverrides = @(
+    '--set-string', "externalServices.postgres.ip=$hostGatewayIp",
+    '--set-string', "externalServices.rabbitmq.ip=$hostGatewayIp",
+    '--set-string', "global.hostAliases[0].ip=$hostGatewayIp",
+    '--set-string', "global.hostAliases[0].hostnames[0]=keycloak.localhost"
+)
 
 if (-not $SkipImages) {
     Write-Host '==> Building images' -ForegroundColor Cyan
@@ -97,12 +104,8 @@ if (-not $SkipSecrets) {
     Write-Host '==> Resolving the Secret name from the rendered chart' -ForegroundColor Cyan
     $rendered = & helm template $ReleaseName $chartPath `
         --namespace $Namespace `
-        --values (Join-Path $chartPath 'values.yaml') `
         --values (Join-Path $chartPath 'values-kind.yaml') `
-        --set-string "global.hostAliases[0].ip=$hostGatewayIp" `
-        --set-string "global.hostAliases[0].hostnames[0]=keycloak.localhost" `
-        --set-string "global.external.keycloakHost=$hostGatewayIp" `
-        --set-string "global.external.rabbitmqHost=$hostGatewayIp" 2>&1
+        @kindOverrides 2>&1
     if ($LASTEXITCODE -ne 0) { throw 'helm template failed while resolving the Secret name.' }
 
     $match = $rendered | Select-String -Pattern '^\s+name: (\S*-app-secrets)\s*$' |
@@ -121,16 +124,8 @@ if (-not $SkipSecrets) {
 Write-Host '==> Deploying the Helm release' -ForegroundColor Cyan
 & helm upgrade --install $ReleaseName $chartPath `
     --namespace $Namespace --create-namespace `
-    --values (Join-Path $chartPath 'values.yaml') `
     --values (Join-Path $chartPath 'values-kind.yaml') `
-    --set-string "global.hostAliases[0].ip=$hostGatewayIp" `
-    --set-string "global.hostAliases[0].hostnames[0]=keycloak.localhost" `
-    --set-string "global.external.keycloakHost=$hostGatewayIp" `
-    --set-string "global.external.rabbitmqHost=$hostGatewayIp" `
-    --set-string "services.account-service.env.SPRING_DATASOURCE_URL=jdbc:postgresql://${hostGatewayIp}:5433/account_service_database" `
-    --set-string "services.bill-service.env.SPRING_DATASOURCE_URL=jdbc:postgresql://${hostGatewayIp}:5433/bill_service_database" `
-    --set-string "services.deposit-service.env.SPRING_DATASOURCE_URL=jdbc:postgresql://${hostGatewayIp}:5433/deposit_service_database" `
-    --set-string "services.notification-service.env.SPRING_DATASOURCE_URL=jdbc:postgresql://${hostGatewayIp}:5433/notification_service_database" `
+    @kindOverrides `
     --wait --timeout 10m
 if ($LASTEXITCODE -ne 0) { throw 'helm upgrade failed.' }
 
