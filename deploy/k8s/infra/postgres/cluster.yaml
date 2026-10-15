@@ -1,0 +1,75 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: bank
+spec:
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.15-minimal-trixie
+  instances: 3
+  bootstrap:
+    initdb:
+      database: bank_control
+      owner: bank_admin
+      secret:
+        name: postgres-admin-credentials
+  managed:
+    services:
+      additional:
+        - selectorType: rw
+          serviceTemplate:
+            metadata:
+              name: postgres
+    roles:
+      - name: account_service_admin
+        ensure: present
+        login: true
+        superuser: false
+        createdb: false
+        passwordSecret:
+          name: account-db-credentials
+      - name: bill_service_admin
+        ensure: present
+        login: true
+        superuser: false
+        createdb: false
+        passwordSecret:
+          name: bill-db-credentials
+      - name: deposit_service_admin
+        ensure: present
+        login: true
+        superuser: false
+        createdb: false
+        passwordSecret:
+          name: deposit-db-credentials
+      - name: notification_service_admin
+        ensure: present
+        login: true
+        superuser: false
+        createdb: false
+        passwordSecret:
+          name: notification-db-credentials
+      - name: keycloak_admin
+        ensure: present
+        login: true
+        superuser: false
+        createdb: false
+        passwordSecret:
+          name: keycloak-db-credentials
+  storage:
+    size: 5Gi
+  walStorage:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: postgres-backups
+  monitoring:
+    enablePodMonitor: false

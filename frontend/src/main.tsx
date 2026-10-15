@@ -48,8 +48,8 @@ async function bootstrap(): Promise<void> {
                 <App />
             </StrictMode>,
         )
-    } catch {
-        console.error('Authentication initialization failed')
+    } catch (error) {
+        console.error('Authentication initialization failed', error)
         renderAuthenticationError()
     }
 }

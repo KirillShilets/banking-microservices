@@ -1,41 +1,48 @@
 global:
+  keycloak:
+    issuerUri: "http://keycloak.localhost/realms/bank-realm"
+    jwkSetUri: "http://keycloak:8080/realms/bank-realm/protocol/openid-connect/certs"
+  keycloak:
+    jwkSetUri: "http://keycloak:8080/realms/bank-realm/protocol/openid-connect/certs"
   environment: kind
   imageRegistry: ""
+  qosGuaranteed: false
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 1
   topologySpreadConstraints:
     enabled: false
 
 externalServices:
   postgres:
-    enabled: true
-    targetPort: 5433
+    enabled: false
   rabbitmq:
-    enabled: true
+    enabled: false
 
 probes:
   startup:
     failureThreshold: 60
-
-pdb:
-  enabled: false
-
-networkPolicy:
-  enabled: false
+    timeoutSeconds: 5
+  readiness:
+    timeoutSeconds: 5
+  liveness:
+    timeoutSeconds: 5
 
 resources:
   spring:
     requests:
-      cpu: 500m
+      cpu: 200m
       memory: 384Mi
     limits:
-      cpu: 500m
-      memory: 384Mi
+      cpu: "1"
+      memory: 512Mi
   gateway:
     requests:
-      cpu: 500m
+      cpu: 250m
       memory: 448Mi
     limits:
-      cpu: 500m
-      memory: 448Mi
+      cpu: "1"
+      memory: 640Mi
   frontend:
     requests:
       cpu: 10m
@@ -44,14 +51,12 @@ resources:
       cpu: 100m
       memory: 24Mi
 
-serviceMonitor:
-  enabled: false
-
 services:
   config-service:
     replicas: 1
   discovery-service:
     replicas: 1
+    enabled: false
   account-service:
     replicas: 1
   bill-service:

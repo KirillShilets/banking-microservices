@@ -1,0 +1,26 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: User
+metadata:
+  name: bank-app
+  namespace: bank
+spec:
+  tags: []
+  importCredentialsSecret:
+    name: rabbitmq-app-credentials
+  rabbitmqClusterReference:
+    name: rabbitmq
+---
+apiVersion: rabbitmq.com/v1beta1
+kind: Permission
+metadata:
+  name: bank-app
+  namespace: bank
+spec:
+  vhost: "/"
+  user: bankmq
+  permissions:
+    configure: ".*"
+    write: ".*"
+    read: ".*"
+  rabbitmqClusterReference:
+    name: rabbitmq

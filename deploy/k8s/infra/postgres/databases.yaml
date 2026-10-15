@@ -1,0 +1,54 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: account-service-database
+  namespace: bank
+spec:
+  name: account_service_database
+  owner: account_service_admin
+  cluster:
+    name: postgres
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: bill-service-database
+  namespace: bank
+spec:
+  name: bill_service_database
+  owner: bill_service_admin
+  cluster:
+    name: postgres
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: deposit-service-database
+  namespace: bank
+spec:
+  name: deposit_service_database
+  owner: deposit_service_admin
+  cluster:
+    name: postgres
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: notification-service-database
+  namespace: bank
+spec:
+  name: notification_service_database
+  owner: notification_service_admin
+  cluster:
+    name: postgres
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: keycloak-database
+  namespace: bank
+spec:
+  name: keycloak_database
+  owner: keycloak_admin
+  cluster:
+    name: postgres

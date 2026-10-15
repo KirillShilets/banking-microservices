@@ -2,7 +2,7 @@ import Keycloak from 'keycloak-js'
 
 const keycloakUrl =
     import.meta.env.VITE_KEYCLOAK_URL?.trim() ||
-    'http://keycloak.localhost:8080'
+    'http://keycloak.localhost'
 
 const keycloakRealm =
     import.meta.env.VITE_KEYCLOAK_REALM?.trim() || 'bank-realm'

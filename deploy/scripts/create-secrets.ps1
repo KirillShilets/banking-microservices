@@ -39,8 +39,48 @@ function Get-Required {
     return $config[$Key]
 }
 
-if ([string]::IsNullOrWhiteSpace($SecretName)) {
-    $SecretName = "${ReleaseName}-app-secrets"
+foreach ($key in 'ACCOUNT_DB_PASSWORD', 'BILL_DB_PASSWORD', 'DEPOSIT_DB_PASSWORD', 'NOTIFICATION_DB_PASSWORD', 'KEYCLOAK_DB_PASSWORD', 'RABBITMQ_PASSWORD', 'MAIL_PASSWORD') {
+    if ((Get-Required $key) -eq 'change-me') {
+        throw ".env still contains the example password for '$key'. Set a unique value before deployment."
+    }
+}
+
+function New-RandomSecretValue {
+    param([int] $Length = 40)
+    $bytes = [byte[]]::new($Length)
+    $generator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $generator.GetBytes($bytes) } finally { $generator.Dispose() }
+    return [Convert]::ToBase64String($bytes).Replace('+', 'A').Replace('/', 'B').TrimEnd('=').Substring(0, $Length)
+}
+
+function Apply-GenericSecret {
+    param(
+        [Parameter(Mandatory)][string] $Name,
+        [Parameter(Mandatory)][System.Collections.IDictionary] $Values,
+        [string] $Type = 'Opaque'
+    )
+    $kubectlArgs = @('create', 'secret', 'generic', $Name, '-n', $Namespace, "--type=$Type", '--dry-run=client', '-o', 'yaml')
+    foreach ($entry in $Values.GetEnumerator()) {
+        $kubectlArgs += "--from-literal=$($entry.Key)=$($entry.Value)"
+    }
+    & kubectl @kubectlArgs | & kubectl apply -f - | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not apply secret '$Name'." }
+}
+
+function Ensure-GeneratedSecret {
+    param(
+        [Parameter(Mandatory)][string] $Name,
+        [Parameter(Mandatory)][System.Collections.IDictionary] $Values
+    )
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & kubectl get secret $Name -n $Namespace *> $null
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    if ($LASTEXITCODE -eq 0) { return }
+    Apply-GenericSecret -Name $Name -Values $Values
 }
 
 Write-Host '==> Ensuring the namespace exists' -ForegroundColor Cyan
@@ -62,16 +102,13 @@ try {
 }
 
 $literals = [ordered]@{
-    'SPRING_SECURITY_USER_NAME' = Get-Required 'SPRING_SECURITY_USER_NAME'
-    'SPRING_SECURITY_PASSWORD'  = Get-Required 'SPRING_SECURITY_PASSWORD'
-
-    'ACCOUNT_DB_USER'           = Get-Required 'ACCOUNT_DB_USER'
+    'ACCOUNT_DB_USER'           = 'account_service_admin'
     'ACCOUNT_DB_PASSWORD'       = Get-Required 'ACCOUNT_DB_PASSWORD'
-    'BILL_DB_USER'              = Get-Required 'BILL_DB_USER'
+    'BILL_DB_USER'              = 'bill_service_admin'
     'BILL_DB_PASSWORD'          = Get-Required 'BILL_DB_PASSWORD'
-    'DEPOSIT_DB_USER'           = Get-Required 'DEPOSIT_DB_USER'
+    'DEPOSIT_DB_USER'           = 'deposit_service_admin'
     'DEPOSIT_DB_PASSWORD'       = Get-Required 'DEPOSIT_DB_PASSWORD'
-    'NOTIFICATION_DB_USER'      = Get-Required 'NOTIFICATION_DB_USER'
+    'NOTIFICATION_DB_USER'      = 'notification_service_admin'
     'NOTIFICATION_DB_PASSWORD'  = Get-Required 'NOTIFICATION_DB_PASSWORD'
 
     'RABBITMQ_USERNAME'         = Get-Required 'RABBITMQ_USERNAME'
@@ -81,13 +118,46 @@ $literals = [ordered]@{
     'MAIL_PASSWORD'             = Get-Required 'MAIL_PASSWORD'
 }
 
-$applyArgs = @('create', 'secret', 'generic', $SecretName, '-n', $Namespace, '--dry-run=client', '-o', 'yaml')
-foreach ($entry in $literals.GetEnumerator()) {
-    $applyArgs += "--from-literal=$($entry.Key)=$($entry.Value)"
+Write-Host "==> Applying secret '$SecretName' in namespace '$Namespace'" -ForegroundColor Cyan
+Apply-GenericSecret -Name $SecretName -Values $literals
+
+$databaseCredentials = @(
+    @{ Secret = 'account-db-credentials'; User = 'account_service_admin'; Password = Get-Required 'ACCOUNT_DB_PASSWORD' },
+    @{ Secret = 'bill-db-credentials'; User = 'bill_service_admin'; Password = Get-Required 'BILL_DB_PASSWORD' },
+    @{ Secret = 'deposit-db-credentials'; User = 'deposit_service_admin'; Password = Get-Required 'DEPOSIT_DB_PASSWORD' },
+    @{ Secret = 'notification-db-credentials'; User = 'notification_service_admin'; Password = Get-Required 'NOTIFICATION_DB_PASSWORD' },
+    @{ Secret = 'keycloak-db-credentials'; User = 'keycloak_admin'; Password = Get-Required 'KEYCLOAK_DB_PASSWORD' }
+)
+
+foreach ($credential in $databaseCredentials) {
+    Apply-GenericSecret -Name $credential.Secret -Type 'kubernetes.io/basic-auth' -Values ([ordered]@{
+        username = $credential.User
+        password = $credential.Password
+    })
+    & kubectl label secret $credential.Secret -n $Namespace 'cnpg.io/reload=true' --overwrite | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not label the PostgreSQL credentials Secret '$($credential.Secret)'." }
 }
 
-Write-Host "==> Applying secret '$SecretName' in namespace '$Namespace'" -ForegroundColor Cyan
-& kubectl @applyArgs | & kubectl apply -f -
-if ($LASTEXITCODE -ne 0) { throw 'Secret creation failed.' }
+Apply-GenericSecret -Name 'rabbitmq-app-credentials' -Values ([ordered]@{
+    username = Get-Required 'RABBITMQ_USERNAME'
+    password = Get-Required 'RABBITMQ_PASSWORD'
+})
+& kubectl label secret rabbitmq-app-credentials -n $Namespace 'rabbitmq.com/topology-operator=true' --overwrite | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not label the RabbitMQ credentials Secret.' }
+
+Ensure-GeneratedSecret -Name 'postgres-admin-credentials' -Values ([ordered]@{
+    username = 'bank_admin'
+    password = New-RandomSecretValue -Length 48
+})
+& kubectl label secret postgres-admin-credentials -n $Namespace 'cnpg.io/reload=true' --overwrite | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not label the PostgreSQL admin Secret.' }
+Ensure-GeneratedSecret -Name 'minio-root-credentials' -Values ([ordered]@{
+    username = New-RandomSecretValue -Length 20
+    password = New-RandomSecretValue -Length 40
+})
+Ensure-GeneratedSecret -Name 'postgres-backup-credentials' -Values ([ordered]@{
+    ACCESS_KEY_ID = New-RandomSecretValue -Length 20
+    ACCESS_SECRET_KEY = New-RandomSecretValue -Length 40
+})
 
 Write-Host 'Done. Secret contents were not printed.' -ForegroundColor Green

@@ -1,15 +1,17 @@
 global:
   environment: kind
   imageRegistry: ""
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
   existingSecret: "bank-app-secrets"
   imagePullSecrets: []
   hostAliases: []
   keycloak:
-    issuerUri: "http://keycloak.localhost:8080/realms/bank-realm"
+    issuerUri: "http://keycloak.localhost/realms/bank-realm"
     jwkSetUri: ""
   eurekaDefaultZone: ""
   external:
-    keycloakHost: "keycloak.localhost"
     rabbitmqHost: "rabbitmq"
     rabbitmqPort: 5672
   lifecycle:
@@ -33,17 +35,6 @@ global:
     whenUnsatisfiable: ScheduleAnyway
   podAnnotations: {}
   podLabels: {}
-  extraEnv:
-    - name: SPRING_SECURITY_USER_NAME
-      valueFrom:
-        secretKeyRef:
-          name: bank-app-secrets
-          key: SPRING_SECURITY_USER_NAME
-    - name: SPRING_SECURITY_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: bank-app-secrets
-          key: SPRING_SECURITY_PASSWORD
 
 externalServices:
   postgres:
@@ -122,37 +113,13 @@ resources:
       cpu: 100m
       memory: 32Mi
 
-configServer:
+applicationConfig:
   enabled: true
   mountPath: /app/config
 
-liquibase:
-  migrationJob:
-    enabled: false
-    useService: config-service
-    activeDeadlineSeconds: 900
-    backoffLimit: 1
-    ttlSecondsAfterFinished: 3600
-
-pdb:
-  enabled: true
-  maxUnavailable: 1
-
-networkPolicy:
-  enabled: true
-  ingressControllerNamespaceSelector:
-    matchLabels:
-      kubernetes.io/metadata.name: ingress-nginx
-
-serviceMonitor:
-  enabled: false
-  interval: 30s
-  scrapeTimeout: 10s
-  labels: {}
-
 services:
   config-service:
-    enabled: true
+    enabled: false
     component: platform
     replicas: 1
     image:
@@ -167,8 +134,6 @@ services:
       SPRING_CONFIG_IMPORT: "optional:classpath:/"
     resources: {}
     probes: {}
-    podDisruptionBudget:
-      enabled: false
     service:
       enabled: true
       type: ClusterIP
@@ -177,7 +142,7 @@ services:
       enabled: false
 
   discovery-service:
-    enabled: true
+    enabled: false
     component: platform
     replicas: 1
     image:
@@ -188,8 +153,6 @@ services:
     probes:
       readiness:
         initialDelaySeconds: 10
-    podDisruptionBudget:
-      enabled: false
     service:
       enabled: true
       type: ClusterIP
@@ -345,8 +308,6 @@ services:
             key: MAIL_USERNAME
       - name: MANAGEMENT_HEALTH_MAIL_ENABLED
         value: "false"
-    podDisruptionBudget:
-      enabled: false
     service:
       enabled: true
       type: ClusterIP
@@ -369,7 +330,7 @@ services:
       className: nginx
       annotations: {}
       hosts:
-        - host: api.bank.local
+        - host: api.localhost
           paths:
             - path: /
               pathType: Prefix
@@ -411,7 +372,7 @@ services:
       className: nginx
       annotations: {}
       hosts:
-        - host: app.bank.local
+        - host: app.localhost
           paths:
             - path: /
               pathType: Prefix
