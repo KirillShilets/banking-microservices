@@ -1,9 +1,11 @@
 global:
   environment: prod
+  springProfilesActive: "kubernetes,production"
   imageRegistry: "REPLACE_ME.dkr.ecr.eu-central-1.amazonaws.com"
   existingSecret: "bank-app-secrets"
   keycloak:
     issuerUri: "https://auth.bank.example.com/realms/bank-realm"
+    jwkSetUri: "https://auth.bank.example.com/realms/bank-realm/protocol/openid-connect/certs"
   external:
     keycloakHost: "auth.bank.example.com"
     rabbitmqHost: "b-xxxx.mq.eu-central-1.amazonaws.com"
@@ -17,19 +19,6 @@ externalServices:
     enabled: false
   rabbitmq:
     enabled: false
-
-liquibase:
-  migrationJob:
-    enabled: false
-
-networkPolicy:
-  enabled: true
-
-serviceMonitor:
-  enabled: true
-  interval: 30s
-  labels:
-    release: kube-prometheus-stack
 
 resources:
   spring:
@@ -59,16 +48,13 @@ services:
     replicas: 2
   discovery-service:
     replicas: 2
+    enabled: false
 
   account-service:
     replicas: 3
     env:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://bank-prod.cluster-xxxx.eu-central-1.rds.amazonaws.com:5432/account_service_database?sslmode=verify-full"
       SPRING_RABBITMQ_SSL_ENABLED: "true"
-    podDisruptionBudget:
-      enabled: true
-      maxUnavailable: 1
-
   bill-service:
     replicas: 3
     env:
@@ -76,19 +62,11 @@ services:
       SPRING_RABBITMQ_SSL_ENABLED: "true"
       APP_SANDBOX_DEPOSITS_ENABLED: "false"
       DEPOSIT_MIN_AMOUNT: "10.00"
-    podDisruptionBudget:
-      enabled: true
-      maxUnavailable: 1
-
   deposit-service:
     replicas: 3
     env:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://bank-prod.cluster-xxxx.eu-central-1.rds.amazonaws.com:5432/deposit_service_database?sslmode=verify-full"
       SPRING_RABBITMQ_SSL_ENABLED: "true"
-    podDisruptionBudget:
-      enabled: true
-      maxUnavailable: 1
-
   notification-service:
     replicas: 1
     env:
@@ -104,7 +82,7 @@ services:
       annotations:
         alb.ingress.kubernetes.io/scheme: internet-facing
         alb.ingress.kubernetes.io/target-type: ip
-        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443]'
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
         alb.ingress.kubernetes.io/ssl-redirect: "443"
       hosts:
         - host: api.bank.example.com
@@ -115,10 +93,6 @@ services:
         - secretName: bank-api-tls
           hosts:
             - api.bank.example.com
-    podDisruptionBudget:
-      enabled: true
-      maxUnavailable: 1
-
   frontend:
     replicas: 3
     ingress:
@@ -126,7 +100,7 @@ services:
       annotations:
         alb.ingress.kubernetes.io/scheme: internet-facing
         alb.ingress.kubernetes.io/target-type: ip
-        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443]'
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
         alb.ingress.kubernetes.io/ssl-redirect: "443"
       hosts:
         - host: app.bank.example.com
@@ -137,6 +111,3 @@ services:
         - secretName: bank-app-tls
           hosts:
             - app.bank.example.com
-    podDisruptionBudget:
-      enabled: true
-      maxUnavailable: 1

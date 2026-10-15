@@ -1,0 +1,21 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: rabbitmq
+  namespace: bank
+spec:
+  replicas: 3
+  persistence:
+    storageClassName: standard
+    storage: 2Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  rabbitmq:
+    additionalConfig: |-
+      cluster_partition_handling = pause_minority
+      disk_free_limit.absolute = 1GB

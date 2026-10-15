@@ -24,10 +24,10 @@ React-интерфейс банковской системы. Frontend прох�
 Файлы .env.development и .env.production используют:
 
 ~~~env
-VITE_KEYCLOAK_URL=http://keycloak.localhost:8080
+VITE_KEYCLOAK_URL=http://keycloak.localhost
 VITE_KEYCLOAK_REALM=bank-realm
 VITE_KEYCLOAK_CLIENT_ID=banking-frontend
-VITE_GATEWAY_URL=http://localhost:8989
+VITE_GATEWAY_URL=http://api.bank.local
 ~~~
 
 Перед входом в браузере должен разрешаться hostname keycloak.localhost через hosts-файл.
@@ -48,10 +48,6 @@ npm run lint
 npm run build
 ~~~
 
-## Docker
+## Kubernetes
 
-В корневом Compose frontend собирается через frontend/Dockerfile и доступен на http://localhost:3000:
-
-~~~powershell
-docker compose up -d --build frontend
-~~~
+Единственный поддерживаемый способ запустить приложение целиком — развернуть его в kind. Инструкция находится в корневом [README.md](../README.md).

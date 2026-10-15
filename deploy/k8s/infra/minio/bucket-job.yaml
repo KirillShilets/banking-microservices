@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-backups-policy
+  namespace: bank
+data:
+  policy.json: |
+    {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:ListBucket"],"Resource":["arn:aws:s3:::postgres-backups"]},{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::postgres-backups/*"]}]}
+  bootstrap.sh: |
+    set -eu
+    until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do sleep 5; done
+    mc mb --ignore-existing local/postgres-backups
+    if ! mc admin user info local "$BACKUP_ACCESS_KEY" >/dev/null 2>&1; then mc admin user add local "$BACKUP_ACCESS_KEY" "$BACKUP_SECRET_KEY"; fi
+    if ! mc admin policy info local postgres-backups >/dev/null 2>&1; then mc admin policy create local postgres-backups /policy/policy.json; fi
+    mc admin policy attach local postgres-backups --user "$BACKUP_ACCESS_KEY"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bootstrap
+  namespace: bank
+spec:
+  backoffLimit: 12
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: initialize
+          image: bank/minio-mc-init:RELEASE.2025-08-13T08-35-41Z
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /scripts/bootstrap.sh
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root-credentials
+                  key: username
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-root-credentials
+                  key: password
+            - name: BACKUP_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-credentials
+                  key: ACCESS_KEY_ID
+            - name: BACKUP_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-credentials
+                  key: ACCESS_SECRET_KEY
+          volumeMounts:
+            - name: policy
+              mountPath: /policy
+              readOnly: true
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: policy
+          configMap:
+            name: postgres-backups-policy
+            items:
+              - key: policy.json
+                path: policy.json
+        - name: script
+          configMap:
+            name: postgres-backups-policy
+            items:
+              - key: bootstrap.sh
+                path: bootstrap.sh

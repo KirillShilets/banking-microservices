@@ -1,4 +1,5 @@
 {{- include "bank-platform.validateServices" . }}
+{{- include "bank-platform.validateProduction" . }}
 {{- $root := . }}
 {{- $hostAliases := include "bank-platform.hostAliases" . }}
 {{- range $name, $svc := .Values.services }}
@@ -23,8 +24,8 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      maxSurge: {{ $root.Values.global.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ $root.Values.global.rollingUpdate.maxUnavailable }}
   template:
     metadata:
       labels:
@@ -33,7 +34,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       annotations:
-        checksum/config: {{ include (print $root.Template.BasePath "/configmap-config-server.yaml") $root | sha256sum }}
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap-application.yaml") $root | sha256sum }}
         {{- with $root.Values.global.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -72,17 +73,26 @@ spec:
               containerPort: {{ $port }}
               protocol: TCP
           env:
+            {{- if ne $name "frontend" }}
             {{- with $root.Values.global.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+            {{- end }}
             - name: ENVIRONMENT
               value: {{ $root.Values.global.environment | quote }}
-            {{- if ne $name "config-service" }}
+            {{- if and (ne $name "config-service") (ne $name "frontend") }}
             - name: SPRING_PROFILES_ACTIVE
-              value: "native"
-            - name: SPRING_CONFIG_IMPORT
-              value: {{ printf "configserver:http://$(SPRING_SECURITY_USER_NAME):$(SPRING_SECURITY_PASSWORD)@config-service:%v" (index $root.Values.servicePorts "config-service") | quote }}
+              value: {{ $root.Values.global.springProfilesActive | default "kubernetes" | quote }}
+            - name: SPRING_CONFIG_LOCATION
+              value: {{ printf "file:%s/" $root.Values.applicationConfig.mountPath | quote }}
+            - name: SPRING_CONFIG_NAME
+              value: {{ printf "application,%s" $name | quote }}
+            - name: SPRING_APPLICATION_NAME
+              value: {{ $name | quote }}
+            - name: SPRING_CLOUD_CONFIG_ENABLED
+              value: "false"
             {{- end }}
+            {{- if ne $name "frontend" }}
             - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
               value: {{ $root.Values.global.keycloak.issuerUri | quote }}
             {{- if $root.Values.global.keycloak.jwkSetUri }}
@@ -99,13 +109,6 @@ spec:
             - name: RABBITMQ_PORT
               value: {{ $root.Values.global.external.rabbitmqPort | default 5672 | quote }}
             {{- end }}
-            {{- if and (eq $name "config-service") $root.Values.configServer.enabled }}
-            - name: SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS
-              value: {{ printf "file:%s/" $root.Values.configServer.mountPath | quote }}
-            {{- end }}
-            {{- if $root.Values.liquibase.migrationJob.enabled }}
-            - name: SPRING_LIQUIBASE_ENABLED
-              value: "false"
             {{- end }}
             {{- range $key, $value := $svc.env }}
             {{- if ne (toString $value) "" }}
@@ -182,9 +185,9 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            {{- if and (eq $name "config-service") $root.Values.configServer.enabled }}
-            - name: config-server-content
-              mountPath: {{ $root.Values.configServer.mountPath }}
+            {{- if and (ne $name "config-service") (ne $name "frontend") $root.Values.applicationConfig.enabled }}
+            - name: application-config
+              mountPath: {{ $root.Values.applicationConfig.mountPath }}
               readOnly: true
             {{- end }}
             {{- with $svc.extraVolumeMounts }}
@@ -195,10 +198,10 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 128Mi
-        {{- if and (eq $name "config-service") $root.Values.configServer.enabled }}
-        - name: config-server-content
+        {{- if and (ne $name "config-service") (ne $name "frontend") $root.Values.applicationConfig.enabled }}
+        - name: application-config
           configMap:
-            name: {{ printf "%s-config-server" (include "bank-platform.fullname" $root) }}
+            name: {{ printf "%s-application-config" (include "bank-platform.fullname" $root) }}
             defaultMode: 0444
         {{- end }}
         {{- with $svc.extraVolumes }}

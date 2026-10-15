@@ -175,3 +175,20 @@ Usage: {{ include "bank-platform.validateServices" $ }}
 {{- end -}}
 {{- end -}}
 {{- end }}
+
+{{- define "bank-platform.validateProduction" -}}
+{{- if eq .Values.global.environment "prod" -}}
+{{- $serializedValues := toJson .Values -}}
+{{- if regexMatch "(?i)(REPLACE_ME|HOST_IP|xxxx|example\\.com)" $serializedValues -}}
+{{- fail "production values contain a placeholder; replace example hosts, registry, and addresses before rendering" -}}
+{{- end -}}
+{{- range $name, $svc := .Values.services -}}
+{{- if $svc.enabled -}}
+{{- $digest := default "" $svc.image.digest -}}
+{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" $digest) -}}
+{{- fail (printf "services.%s.image.digest must be a sha256 digest for production" $name) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end }}

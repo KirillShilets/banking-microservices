@@ -1,6 +1,6 @@
 # ⚙️ Config Service
 
-Централизованный Spring Cloud Config Server. Он отдает конфигурацию сервисов из src/main/resources/services и из смонтированной Docker-директории /app/config.
+Исходный Spring Cloud Config Server. В Kubernetes он выключен: приложение использует ConfigMap, созданный Helm-чартом.
 
 ## 🗂️ Конфигурация
 
@@ -30,11 +30,7 @@ config-service/src/main/resources/services/
 .\gradlew.bat :config-service:bootRun
 ~~~
 
-Обычно сервис запускается через корневой Compose-файл:
-
-~~~powershell
-docker compose up -d --build config-service
-~~~
+Kubernetes не разворачивает этот сервис. Для локальной разработки модуля можно запустить Gradle-команду выше.
 
 ## ⚠️ Важно
 

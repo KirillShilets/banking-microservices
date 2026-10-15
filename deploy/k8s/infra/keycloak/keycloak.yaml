@@ -1,0 +1,43 @@
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: bank
+spec:
+  instances: 1
+  db:
+    vendor: postgres
+    host: postgres
+    database: keycloak_database
+    usernameSecret:
+      name: keycloak-db-credentials
+      key: username
+    passwordSecret:
+      name: keycloak-db-credentials
+      key: password
+  http:
+    httpEnabled: true
+    serviceName: keycloak
+    serviceHttpPort: 8080
+  hostname:
+    hostname: http://keycloak.localhost
+  ingress:
+    enabled: false
+  proxy:
+    headers: xforwarded
+  resources:
+    requests:
+      cpu: 500m
+      memory: 768Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  readinessProbe:
+    periodSeconds: 10
+    failureThreshold: 6
+  livenessProbe:
+    periodSeconds: 20
+    failureThreshold: 3
+  startupProbe:
+    periodSeconds: 10
+    failureThreshold: 60
