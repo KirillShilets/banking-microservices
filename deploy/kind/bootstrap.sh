@@ -276,6 +276,38 @@ kubectl apply -f "${INFRA_PATH}/postgres/object-store.yaml"
 kubectl apply -f "${INFRA_PATH}/postgres/cluster.yaml"
 kubectl wait --for=condition=Ready cluster.postgresql.cnpg.io/postgres -n "$NAMESPACE" --timeout=900s
 kubectl apply -f "${INFRA_PATH}/postgres/databases.yaml"
+
+# CNPG reconciles the Database CRs asynchronously; a Helm pre-install hook
+# (bank-*-migrate) runs immediately afterwards, so block until every managed
+# database actually exists before installing the chart.
+PG_ADMIN_USER="$(kubectl get secret postgres-admin-credentials -n "$NAMESPACE" -o jsonpath='{.data.username}' | base64 -d)"
+PG_ADMIN_PASSWORD="$(kubectl get secret postgres-admin-credentials -n "$NAMESPACE" -o jsonpath='{.data.password}' | base64 -d)"
+
+wait_for_database() {
+    local db="$1" pod attempt=0
+    while (( attempt < 60 )); do
+        pod="$(kubectl get pods -n "$NAMESPACE" -l cnpg.io/cluster=postgres -o jsonpath='{.items[?(@.metadata.labels.role=="primary")].metadata.name}')"
+        if [[ -z "$pod" ]]; then
+            pod="$(kubectl get pods -n "$NAMESPACE" -l cnpg.io/cluster=postgres -o name | sed -n 's|^pod/||p' | grep '^postgres-[0-9]' | head -n1 || true)"
+        fi
+        if [[ -n "$pod" ]] && \
+            kubectl exec -n "$NAMESPACE" "$pod" -- env \
+                PGPASSWORD="$PG_ADMIN_PASSWORD" psql -U "$PG_ADMIN_USER" -h /var/run/postgresql \
+                -d bank_control -tAc "SELECT 1 FROM pg_database WHERE datname='${db}'" \
+                2>/dev/null | grep -q "^ *1$"; then
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        sleep 5
+    done
+    fail "CNPG database '${db}' was not created within 300s"
+}
+
+for db in account_service_database bill_service_database deposit_service_database notification_service_database keycloak_database; do
+    echo "==> Waiting for CNPG database '${db}'"
+    wait_for_database "$db"
+done
+
 kubectl apply -f "${INFRA_PATH}/postgres/scheduled-backup.yaml"
 
 # =============================================================================

@@ -39,8 +39,11 @@ spec:
           image: {{ include "bank-platform.image" (dict "name" $name "svc" $svc "root" $) | quote }}
           imagePullPolicy: {{ include "bank-platform.imagePullPolicy" (dict "svc" $svc "root" $) }}
           # Preserve the image ENTRYPOINT (sh -c "exec java $JAVA_OPTS -jar app.jar")
-          # and append the migration CLI args as "$@".
-          command: ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar \"$@\""]
+          # and append the migration CLI args as "$@". CNPG creates the managed
+          # databases asynchronously after its Database CR is applied, so retry
+          # the migration for a while before giving up (pod-level backoff then
+          # applies per backoffLimit).
+          command: ["sh", "-c", "set -e; for attempt in $(seq 1 12); do if java $JAVA_OPTS -jar app.jar \"$@\"; then exit 0; fi; echo \"migration attempt ${attempt}/12 failed; retrying in 10s\" >&2; sleep 10; done; exit 1"]
           args:
             - --spring.profiles.active=kubernetes,migrate
             - --spring.liquibase.enabled=true
