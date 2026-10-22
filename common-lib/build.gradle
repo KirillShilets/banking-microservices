@@ -38,6 +38,12 @@ dependencies {
     // Used only by the @Profile("migrate") LiquibaseMigrationRunner; consumers
     // (account/bill/deposit/notification-service) already ship liquibase-core at runtime.
     compileOnly 'org.liquibase:liquibase-core'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.liquibase:liquibase-core'
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'jakarta.servlet:jakarta.servlet-api'
 }
 
 test {
