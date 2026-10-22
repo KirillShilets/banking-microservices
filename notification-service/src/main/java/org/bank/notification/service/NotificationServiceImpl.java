@@ -63,7 +63,7 @@ public class NotificationServiceImpl implements NotificationService {
         message.setFrom(senderEmail);
         message.setSubject("Deposit Notification");
         message.setText(String.format(
-                "Your deposit was successful.\nAmount: %s",
+                "Your deposit was successful.%nAmount: %s",
                 requestDTO.amount()
         ));
 
