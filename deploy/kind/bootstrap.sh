@@ -376,11 +376,31 @@ fi
 
 # =============================================================================
 echo "==> Deploying application tier with Helm"
-helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
-    --namespace "$NAMESPACE" \
-    --create-namespace \
-    --values "${CHART_PATH}/values-kind.yaml" \
-    --wait --timeout 15m
+if ! helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
+        --namespace "$NAMESPACE" \
+        --create-namespace \
+        --values "${CHART_PATH}/values-kind.yaml" \
+        --wait --timeout 15m; then
+    echo "==> Helm install failed; collecting cluster diagnostics"
+    echo "--- helm status ---"
+    helm status "$RELEASE_NAME" --namespace "$NAMESPACE" 2>&1 || true
+    echo "--- recent events ---"
+    kubectl -n "$NAMESPACE" get events --sort-by=.lastTimestamp 2>&1 | tail -80 || true
+    echo "--- pods ---"
+    kubectl -n "$NAMESPACE" get pods -o wide 2>&1 || true
+    echo "--- container states ---"
+    kubectl -n "$NAMESPACE" get pods \
+        -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.containerStatuses[*]}  {.name}: {.state}{"\n"}{end}{end}' \
+        2>&1 || true
+    echo "--- pod logs (tail 100) ---"
+    for p in $(kubectl -n "$NAMESPACE" get pods -o name 2>/dev/null); do
+        echo ">>> ${p}"
+        kubectl -n "$NAMESPACE" logs "$p" --tail=100 2>&1 || true
+        echo ">>> ${p} (previous)"
+        kubectl -n "$NAMESPACE" logs "$p" --previous --tail=100 2>&1 || true
+    done
+    exit 1
+fi
 
 echo "==> Waiting for application rollouts"
 for svc in account-service bill-service deposit-service notification-service gateway-service frontend; do
