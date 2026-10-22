@@ -8,6 +8,8 @@ build/
 mail-props.properties
 .env*
 !.env.example
+.codex/
+rendered.yaml
 
 ### IntelliJ IDEA ###
 .idea/
@@ -42,3 +44,7 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Frontend test coverage ###
+frontend/coverage/
+BOOT-INF/
