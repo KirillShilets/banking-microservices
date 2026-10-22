@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs suppression filter for this multi-module build.
+
+  Only intentional, reviewed suppressions live here. Every entry is a single
+  bug pattern bound to a single class:
+
+   * EI_EXPOSE_REP2 — the flagged "mutable object" is a Spring-managed
+     singleton (ObjectMapper, RabbitTemplate, repositories) injected by the
+     container and is thread-safe by contract; defensive copies would be
+     wrong (new mapper per bean) and hides the shared, immutable-after-init
+     nature of these beans. The field is final and never re-assigned.
+   * CT_CONSTRUCTOR_THROW — fail-fast validation of @Value configuration in
+     constructors (positive monetary amount, positive AMQP confirmation
+     timeout). Throwing at DI time is deliberate: the application must not
+     start with invalid configuration.
+   * VA_FORMAT_STRING_USES_NEWLINE — integration-test JSON payloads are built
+     with Java text blocks (.formatted(...)); literal newlines are the
+     intended formatting of the payload, not a platform-portability issue.
+
+  These are the ONLY exceptions to the "SpotBugs must be clean" rule
+  (ignoreFailures=false); any new finding must be fixed, not added here.
+-->
+<FindBugsFilter>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.account.outbox.OutboxMessageProcessor"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.account.outbox.OutboxService"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.bill.messaging.RabbitAccountQueryGateway"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.bill.outbox.OutboxScheduler"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.bill.outbox.OutboxService"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.migration.LiquibaseMigrationRunner"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.gateway.exception.GlobalWebFluxExceptionHandler"/>
+    </Match>
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+        <Class name="org.bank.bill.service.BillServiceImpl"/>
+    </Match>
+    <Match>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+        <Class name="org.bank.messaging.RabbitCommandPublisher"/>
+    </Match>
+    <Match>
+        <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+        <Class name="org.bank.bill.integration.BillIntegrationTest"/>
+    </Match>
+</FindBugsFilter>
