@@ -1,0 +1,21 @@
+---
+# YAML lint configuration for CI (yamllint).
+#
+# Kept deliberately permissive: the repository targets Helm charts, GitHub
+# Actions workflows and deploy scripts, none of which conform to strict
+# prose-style YAML conventions (no mandatory document start in every file,
+# generous line lengths, colons inside inline flows).
+extends: relaxed
+
+# Helm Go templates ({{ ... }}) are not valid YAML and cannot be parsed by yamllint.
+ignore: |
+  helm/bank-platform/templates/**
+
+rules:
+  document-start: disable
+  line-length: disable
+  comments:
+    min-spaces-from-content: 1
+  truthy:
+    check-keys: false
+  key-duplicates: enable
