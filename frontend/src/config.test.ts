@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { appConfig, withoutTrailingSlash } from './config'
+import { appConfig, pick, withoutTrailingSlash } from './config'
 
 describe('appConfig defaults', () => {
     it('uses defaults when no runtime override', () => {
@@ -17,6 +17,23 @@ describe('withoutTrailingSlash', () => {
 
     it('returns value unchanged when no trailing slash', () => {
         expect(withoutTrailingSlash('http://localhost')).toBe('http://localhost')
+    })
+})
+
+describe('pick', () => {
+    it('returns only the requested keys from a partial config', () => {
+        const picked = pick({ gatewayUrl: 'http://g', keycloakRealm: 'r' }, 'gatewayUrl')
+        expect(picked).toEqual({ gatewayUrl: 'http://g' })
+        expect('keycloakRealm' in picked).toBe(false)
+    })
+
+    it('skips keys that are absent from the source object', () => {
+        const picked = pick({ gatewayUrl: 'http://g' }, 'keycloakUrl', 'gatewayUrl')
+        expect(picked).toEqual({ gatewayUrl: 'http://g' })
+    })
+
+    it('returns an empty object when no keys are requested', () => {
+        expect(pick({ gatewayUrl: 'http://g' })).toEqual({})
     })
 })
 
