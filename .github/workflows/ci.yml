@@ -112,7 +112,8 @@ jobs:
             **/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
             **/build/reports/jacoco/jacocoIntegrationTestReport/jacocoIntegrationTestReport.xml
             **/build/jacoco/*.exec
-            **/build/reports/spotbugs/spotbugsMain.xml
+            **/build/test-results/test/
+            **/build/test-results/integrationTest/
             **/build/classes/java/main
             **/build/classes/java/test
           retention-days: 3
@@ -469,6 +470,12 @@ jobs:
       - name: Regenerate JaCoCo reports from execution data
         run: ./gradlew jacocoXmlReportsFromExec --no-daemon
 
+      # SpotBugs XML reports are produced in the backend-unit job; regenerate
+      # them here from sources (no test execution required) so the Sonar
+      # scanner can import them without shipping extra artifacts.
+      - name: Regenerate SpotBugs reports from sources
+        run: ./gradlew spotbugsMain -x test -x integrationTest --no-daemon
+
       - name: Verify Sonar inputs were restored
         run: |
           set -euo pipefail
@@ -476,6 +483,12 @@ jobs:
           echo "JaCoCo XML reports present: ${xml_count}"
           if [ "${xml_count}" -lt 10 ]; then
             echo "ERROR: expected at least 10 JaCoCo XML reports, got ${xml_count}"
+            exit 1
+          fi
+          spotbugs_count=$(find . -type f -name 'spotbugsMain.xml' | wc -l)
+          echo "SpotBugs XML reports present: ${spotbugs_count}"
+          if [ "${spotbugs_count}" -lt 10 ]; then
+            echo "ERROR: expected at least 10 SpotBugs XML reports, got ${spotbugs_count}"
             exit 1
           fi
 
