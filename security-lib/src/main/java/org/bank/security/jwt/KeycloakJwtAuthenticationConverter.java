@@ -23,7 +23,9 @@ public final class KeycloakJwtAuthenticationConverter
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
-        Collection<GrantedAuthority> authorities = new ArrayList<>(scopeConverter.convert(jwt));
+        Collection<GrantedAuthority> scopedAuthorities = scopeConverter.convert(jwt);
+        Collection<GrantedAuthority> authorities = new ArrayList<>(
+                scopedAuthorities != null ? scopedAuthorities : List.of());
         authorities.addAll(realmRoles(jwt));
         return new JwtAuthenticationToken(jwt, authorities, jwt.getSubject());
     }
