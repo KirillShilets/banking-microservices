@@ -108,6 +108,21 @@ subprojects {
         }
     }
 
+    // CI-only task: regenerates the JaCoCo XML reports from execution data that
+    // was shipped as an artifact, without re-running any tests. Unlike
+    // jacocoTestReport/jacocoIntegrationTestReport it has no test dependencies,
+    // so it works even when 'test'/'integrationTest' are excluded on the runner.
+    tasks.register('jacocoXmlReportsFromExec', org.gradle.testing.jacoco.tasks.JacocoReport) {
+        description = 'Generates JaCoCo XML/HTML reports from existing execution data without running tests.'
+        group = 'verification'
+        executionData fileTree("${buildDir}/jacoco").include('*.exec')
+        sourceSets sourceSets.main
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
     spotbugs {
         ignoreFailures = false
         excludeFilter = file("${rootDir}/config/spotbugs/exclude.xml")
@@ -159,6 +174,10 @@ sonar {
         property 'sonar.exclusions', '**/src/main/resources/**,**/build/**'
         property 'sonar.coverage.jacoco.xmlReportPaths', subprojects.collect {
             new File(it.projectDir, 'build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml').absolutePath
+        }.join(',') + ',' + subprojects.collect {
+            new File(it.projectDir, 'build/reports/jacoco/jacocoIntegrationTestReport/jacocoIntegrationTestReport.xml').absolutePath
+        }.join(',') + ',' + subprojects.collect {
+            new File(it.projectDir, 'build/reports/jacoco/jacocoXmlReportsFromExec/jacocoXmlReportsFromExec.xml').absolutePath
         }.join(',')
         property 'sonar.junit.reportPaths', subprojects.collect {
             [new File(it.projectDir, 'build/test-results/test').absolutePath,

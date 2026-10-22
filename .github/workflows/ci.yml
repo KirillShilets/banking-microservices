@@ -112,6 +112,7 @@ jobs:
             **/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
             **/build/reports/jacoco/jacocoIntegrationTestReport/jacocoIntegrationTestReport.xml
             **/build/jacoco/*.exec
+            **/build/reports/spotbugs/spotbugsMain.xml
             **/build/classes/java/main
             **/build/classes/java/test
           retention-days: 3
@@ -461,12 +462,22 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # The downloaded archive contains JaCoCo execution data and compiled
-      # classes, not the rendered XML reports. Regenerate the XML from the
-      # exec data without re-running tests (tests already ran in the
-      # backend-integration job).
+      # The downloaded archive contains JaCoCo execution data; regenerate the
+      # XML reports from that data without re-running tests (tests already ran
+      # in the backend-integration job). jacocoXmlReportsFromExec has no test
+      # dependencies, so it works even when the test tasks are excluded.
       - name: Regenerate JaCoCo reports from execution data
-        run: ./gradlew jacocoTestReport jacocoIntegrationTestReport -x test -x integrationTest --no-daemon
+        run: ./gradlew jacocoXmlReportsFromExec --no-daemon
+
+      - name: Verify Sonar inputs were restored
+        run: |
+          set -euo pipefail
+          xml_count=$(find . -type f -name 'jacoco*.xml' | wc -l)
+          echo "JaCoCo XML reports present: ${xml_count}"
+          if [ "${xml_count}" -lt 10 ]; then
+            echo "ERROR: expected at least 10 JaCoCo XML reports, got ${xml_count}"
+            exit 1
+          fi
 
       - name: Run Sonar analysis and wait for Quality Gate
         run: |
