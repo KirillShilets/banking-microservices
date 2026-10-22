@@ -9,7 +9,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = {
         "org.bank.bill",
-        "org.bank.exception.handler"
+        "org.bank.exception.handler",
+        "org.bank.migration"
 })
 @EnableDiscoveryClient
 @EnableScheduling

@@ -8,7 +8,8 @@ import org.springframework.context.annotation.Import;
 
 @SpringBootApplication(scanBasePackages = {
         "org.bank.notification",
-        "org.bank.exception.handler"
+        "org.bank.exception.handler",
+        "org.bank.migration"
 })
 @EnableDiscoveryClient
 @Import(RabbitMessagingConfiguration.class)
