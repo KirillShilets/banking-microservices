@@ -170,5 +170,6 @@ sonar {
         System.getenv('SONAR_HOST_URL')?.with { hostUrl ->
             property 'sonar.host.url', hostUrl
         }
+        property 'sonar.organization', System.getenv('SONAR_ORGANIZATION') ?: 'kirillshilets'
     }
 }
