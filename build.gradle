@@ -123,7 +123,10 @@ subprojects {
         java {
             removeUnusedImports()
             trimTrailingWhitespace()
-            endWithNewline()
+            // Intentionally no endWithNewline(): the repository historically
+            // contains files without a trailing newline and we keep the diff
+            // minimal — enforced trailing newlines would rewrite dozens of
+            // untouched files on every first run.
         }
     }
 
