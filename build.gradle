@@ -192,7 +192,7 @@ sonar {
              new File(it.projectDir, 'build/test-results/integrationTest').absolutePath]
         }.flatten().join(',')
         property 'sonar.java.spotbugs.reportPaths', subprojects.collect {
-            new File(it.projectDir, 'build/reports/spotbugs/spotbugsMain.xml').absolutePath
+            new File(it.projectDir, 'build/reports/spotbugs/main.xml').absolutePath
         }.join(',')
         System.getenv('SONAR_HOST_URL')?.with { hostUrl ->
             property 'sonar.host.url', hostUrl
