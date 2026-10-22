@@ -6,7 +6,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ $name }}
+  name: {{ printf "%s-%s" (include "bank-platform.fullname" $root) $name }}
   namespace: {{ $root.Release.Namespace }}
   labels:
     {{- include "bank-platform.serviceLabels" (dict "name" $name "svc" $svc "root" $root) | nindent 4 }}
@@ -34,7 +34,7 @@ spec:
             pathType: {{ .pathType | default "Prefix" }}
             backend:
               service:
-                name: {{ $name }}
+                name: {{ printf "%s-%s" (include "bank-platform.fullname" $root) $name }}
                 port:
                   number: {{ $port }}
           {{- end }}

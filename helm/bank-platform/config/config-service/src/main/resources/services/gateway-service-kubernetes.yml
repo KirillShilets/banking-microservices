@@ -5,15 +5,15 @@ spring:
         webflux:
           routes:
             - id: account_service_route
-              uri: http://account-service:8081
+              uri: http://bank-account-service:8081
               predicates:
                 - Path=/accounts/**
             - id: bill_service_route
-              uri: http://bill-service:8082
+              uri: http://bank-bill-service:8082
               predicates:
                 - Path=/bills/**
             - id: deposit_service_route
-              uri: http://deposit-service:8083
+              uri: http://bank-deposit-service:8083
               predicates:
                 - Path=/deposits/**
       globalcors:
