@@ -1,0 +1,81 @@
+global:
+  environment: staging
+  imageRegistry: "ghcr.io/kirillshilets"
+  existingSecret: "bank-app-secrets"
+  imagePullSecrets:
+    - name: ghcr-pull
+  keycloak:
+    issuerUri: "https://auth.staging.bank.example.com/realms/bank-realm"
+    jwkSetUri: "https://auth.staging.bank.example.com/realms/bank-realm/protocol/openid-connect/certs"
+  springProfilesActive: "kubernetes,production"
+  external:
+    rabbitmqHost: "rabbitmq.cluster.local"
+    rabbitmqPort: 5672
+  topologySpreadConstraints:
+    enabled: true
+    whenUnsatisfiable: DoNotSchedule
+
+frontendConfig:
+  KEYCLOAK_URL: "https://auth.staging.bank.example.com"
+  KEYCLOAK_REALM: "bank-realm"
+  KEYCLOAK_CLIENT_ID: "banking-frontend"
+  GATEWAY_URL: "https://api.staging.bank.example.com"
+
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header X-Content-Type-Options nosniff always;
+      add_header X-Frame-Options DENY always;
+      add_header Referrer-Policy strict-origin-when-cross-origin always;
+      add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://auth.staging.bank.example.com https://api.staging.bank.example.com wss:; frame-ancestors 'none'" always;
+
+externalServices:
+  postgres:
+    enabled: false
+  rabbitmq:
+    enabled: false
+
+resources:
+  spring:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  gateway:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  frontend:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 64Mi
+
+services:
+  config-service:
+    replicas: 2
+  discovery-service:
+    enabled: false
+  account-service:
+    replicas: 3
+  bill-service:
+    replicas: 3
+    env:
+      APP_SANDBOX_DEPOSITS_ENABLED: "false"
+      DEPOSIT_MIN_AMOUNT: "10.00"
+  deposit-service:
+    replicas: 3
+  notification-service:
+    replicas: 1
+  gateway-service:
+    replicas: 3
+  frontend:
+    replicas: 3
