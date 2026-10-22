@@ -48,6 +48,11 @@ subprojects {
         imports {
             mavenBom "org.springframework.cloud:spring-cloud-dependencies:2025.0.3"
         }
+        dependencies {
+            // Spring Boot 3.5.x BOM pins FreeMarker 2.3.34, which is vulnerable
+            // to path traversal (GHSA-27j2-h3m2-8237 / CVE-2026-84939).
+            dependency 'org.freemarker:freemarker:2.3.35'
+        }
     }
 
     tasks.withType(Test).configureEach {
@@ -178,6 +183,9 @@ sonar {
             new File(it.projectDir, 'build/reports/jacoco/jacocoIntegrationTestReport/jacocoIntegrationTestReport.xml').absolutePath
         }.join(',') + ',' + subprojects.collect {
             new File(it.projectDir, 'build/reports/jacoco/jacocoXmlReportsFromExec/jacocoXmlReportsFromExec.xml').absolutePath
+        }.join(',')
+        property 'sonar.java.binaries', subprojects.collect {
+            new File(it.projectDir, 'build/classes/java/main').absolutePath
         }.join(',')
         property 'sonar.junit.reportPaths', subprojects.collect {
             [new File(it.projectDir, 'build/test-results/test').absolutePath,
