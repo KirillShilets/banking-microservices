@@ -25,15 +25,17 @@
     .users[]?.credentials[]?.temporary = false
 )
 | (
-    .users[]?
-    | select(.username == "customer.kira")
-    | .credentials = [
-        {
-          type: "password",
-          value: ($ENV.REALM_USER_PASSWORD // error("REALM_USER_PASSWORD env var is required")),
-          temporary: false
-        }
-      ]
+    .users |= map(
+        if .username == "customer.kira" then
+            .credentials = [
+                {
+                  type: "password",
+                  value: ($ENV.REALM_USER_PASSWORD // error("REALM_USER_PASSWORD env var is required")),
+                  temporary: false
+                }
+            ]
+        else . end
+    )
 )
 | (
     .clients += [
