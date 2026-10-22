@@ -1,0 +1,141 @@
+name: promote
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without v prefix, for example 1.2.3
+        required: true
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, prod]
+        default: staging
+
+concurrency:
+  group: promote-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    environment: ${{ (inputs.environment || 'staging') == 'prod' && 'production' || 'staging' }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment || 'staging' }}
+      RAW_VERSION: ${{ inputs.version || github.event.release.tag_name }}
+    steps:
+      - name: Resolve promotion reference
+        id: ref
+        run: |
+          set -euo pipefail
+          if [ "${ENVIRONMENT}" = "prod" ]; then
+            RELEASE_TAG="${RAW_VERSION}"
+            case "$RELEASE_TAG" in v*) ;; *) RELEASE_TAG="v${RELEASE_TAG}";; esac
+            echo "release_ref=refs/tags/${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+            echo "Resolved production promotion ref: refs/tags/${RELEASE_TAG}"
+          else
+            echo "release_ref=main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout (main for staging, release tag for prod)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Prod must be bumped on exactly the released commit; staging on main.
+          ref: ${{ steps.ref.outputs.release_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set OWNER env variable
+        run: echo "OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+      - name: Resolve digests and bump
+        run: |
+          set -euo pipefail
+          VERSION="${RAW_VERSION#v}"
+          f="helm/bank-platform/values-${ENVIRONMENT}.yaml"
+
+          # Install yq from official release assets, verifying the published
+          # SHA-256 checksum before executing anything downloaded.
+          YQ_VERSION="v4.35.1"
+          curl -fsSL -o /tmp/yq.tar.gz \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64.tar.gz"
+          curl -fsSL -o /tmp/yq.tar.gz.sha256 \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64.tar.gz.sha256"
+          (cd /tmp && sha256sum -c yq.tar.gz.sha256)
+          tar -xzf /tmp/yq.tar.gz -C /tmp yq
+          install -m 0755 /tmp/yq /usr/local/bin/yq
+
+          for s in account-service bill-service deposit-service notification-service gateway-service frontend; do
+            for i in $(seq 1 60); do
+              digest="$(docker buildx imagetools inspect "ghcr.io/${OWNER}/bank/${s}:${VERSION}" --format '{{json .Manifest.Digest}}' 2>/dev/null | tr -d '"' || true)"
+              [ -n "$digest" ] && break
+              [ "$i" = 60 ] && { echo "missing ${s}:${VERSION}"; exit 1; }
+              sleep 30
+            done
+
+            # Only write digests that carry a valid Sigstore keyless signature
+            # produced by the release workflow (fail-closed promotion).
+            cosign verify \
+              --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@refs/tags/v" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "ghcr.io/${OWNER}/bank/${s}@${digest}"
+
+            # The image must also carry a build provenance/SBOM attestation,
+            # so a signature alone (any signer with matching flows) is not
+            # sufficient to promote.
+            cosign verify-attestation \
+              --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@refs/tags/v" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --type slsaprovenance \
+              "ghcr.io/${OWNER}/bank/${s}@${digest}" >/dev/null
+
+            yq -i ".services[\"$s\"].image.tag = \"$VERSION\"" "$f"
+            yq -i ".services[\"$s\"].image.digest = \"$digest\"" "$f"
+          done
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Commit and push staging bump
+        if: env.ENVIRONMENT == 'staging'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm/bank-platform/values-staging.yaml
+          git checkout -b chore/promote-staging-${{ env.RAW_VERSION }}
+          git commit -m "chore: promote bank-platform ${{ env.RAW_VERSION }} to staging"
+          git push -u origin chore/promote-staging-${{ env.RAW_VERSION }}
+
+      - name: Open staging promotion PR
+        if: env.ENVIRONMENT == 'staging'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create --title "Promote ${{ env.RAW_VERSION }} to staging" \
+            --body "Promotes bank-platform ${{ env.RAW_VERSION }} to staging. Images signed and scanned." \
+            --base main
+
+      - name: Commit and push prod bump to long-lived branch
+        if: env.ENVIRONMENT == 'prod'
+        run: |
+          BRANCH=promote/prod
+          # Refresh the long-lived branch that Argo CD tracks (targetRevision: promote/prod)
+          git fetch origin "$BRANCH" --quiet || true
+          if git rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -B "$BRANCH"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm/bank-platform/values-prod.yaml
+          git commit -m "chore: promote bank-platform ${{ env.RAW_VERSION }} to production"
+          git push -u origin "$BRANCH"
