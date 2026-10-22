@@ -187,19 +187,13 @@ jobs:
           # Server-Sent Events, no versioned/static resource serving, no
           # UrlHandlerFilter/UrlFileNameViewController, no JavaScriptUtils or
           # JSP form tags. Tracked in BANK-<sec> until the Boot 4 migration.
-          allow-ghsas: |
-            GHSA-pc63-qcmh-9cmg,
-            GHSA-j9f9-w8pj-32f8,
-            GHSA-x23c-287f-qqv5,
-            GHSA-3chg-m5w7-qfv5,
-            GHSA-4773-3jfm-qmx3,
-            GHSA-6p4f-wcwh-5vvm,
-            GHSA-mq64-j8f9-9gcj,
-            GHSA-72pg-x5f8-j25j,
-            GHSA-h3qp-gqrc-q736,
-            GHSA-cjpg-rgq5-fr37,
-            GHSA-957g-f97v-vppc,
-            GHSA-6hcq-hmm3-jj3c,
+          allow-ghsas: >
+            GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8,
+            GHSA-x23c-287f-qqv5, GHSA-3chg-m5w7-qfv5,
+            GHSA-4773-3jfm-qmx3, GHSA-6p4f-wcwh-5vvm,
+            GHSA-mq64-j8f9-9gcj, GHSA-72pg-x5f8-j25j,
+            GHSA-h3qp-gqrc-q736, GHSA-cjpg-rgq5-fr37,
+            GHSA-957g-f97v-vppc, GHSA-6hcq-hmm3-jj3c,
             GHSA-wg35-8jpf-2xv3
 
 
