@@ -1,0 +1,19 @@
+{
+    "packages": {
+        ".": {
+            "release-type": "simple",
+            "extra-files": [
+                {
+                    "type": "yaml",
+                    "path": "helm/bank-platform/Chart.yaml",
+                    "jsonpath": "$.version"
+                },
+                {
+                    "type": "yaml",
+                    "path": "helm/bank-platform/Chart.yaml",
+                    "jsonpath": "$.appVersion"
+                }
+            ]
+        }
+    }
+}
