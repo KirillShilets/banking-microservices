@@ -48,16 +48,10 @@ jobs:
       - name: Assemble artifacts
         run: ./gradlew assemble --no-daemon
 
-      - name: Generate dependency graph
-        # generate (not generate-submit-and-upload): submitting requires the
-        # repository-level "Dependency graph" setting to be enabled under
-        # Settings → Code security and analysis. Until it is, we generate the
-        # graph and upload it as an artifact instead of failing the pipeline.
+      - name: Submit dependency graph
         uses: gradle/actions/dependency-submission@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
-          dependency-graph: generate
-          artifact-name: dependency-graph
-          artifact-dir: dependency-graph-reports
+          dependency-graph: generate-submit-and-upload
 
       - name: Upload unit test reports
         if: always()
@@ -181,11 +175,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      # Dependency review requires the repository-level "Dependency graph"
-      # setting (Settings → Code security and analysis). Until it is enabled the
-      # action fails with "not supported"; keep it non-blocking in the meantime.
       - name: Perform dependency review
-        continue-on-error: true
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
 
 
