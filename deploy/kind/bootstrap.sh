@@ -283,24 +283,35 @@ kubectl apply -f "${INFRA_PATH}/postgres/databases.yaml"
 PG_ADMIN_USER="$(kubectl get secret postgres-admin-credentials -n "$NAMESPACE" -o jsonpath='{.data.username}' | base64 -d)"
 PG_ADMIN_PASSWORD="$(kubectl get secret postgres-admin-credentials -n "$NAMESPACE" -o jsonpath='{.data.password}' | base64 -d)"
 
+kubectl wait --for=condition=Ready pod -l cnpg.io/cluster=postgres -n "$NAMESPACE" --timeout=900s
+
 wait_for_database() {
-    local db="$1" pod attempt=0
-    while (( attempt < 60 )); do
-        pod="$(kubectl get pods -n "$NAMESPACE" -l cnpg.io/cluster=postgres -o jsonpath='{.items[?(@.metadata.labels.role=="primary")].metadata.name}')"
-        if [[ -z "$pod" ]]; then
-            pod="$(kubectl get pods -n "$NAMESPACE" -l cnpg.io/cluster=postgres -o name | sed -n 's|^pod/||p' | grep '^postgres-[0-9]' | head -n1 || true)"
-        fi
-        if [[ -n "$pod" ]] && \
-            kubectl exec -n "$NAMESPACE" "$pod" -- env \
-                PGPASSWORD="$PG_ADMIN_PASSWORD" psql -U "$PG_ADMIN_USER" -h /var/run/postgresql \
-                -d bank_control -tAc "SELECT 1 FROM pg_database WHERE datname='${db}'" \
-                2>/dev/null | grep -q "^ *1$"; then
-            return 0
+    local db="$1" pod attempt=0 last_err=""
+    while (( attempt < 120 )); do
+        pod="$(kubectl get pods -n "$NAMESPACE" -l cnpg.io/cluster=postgres -o name | sed -n 's|^pod/||p' | grep '^postgres-[0-9]' | head -n1 || true)"
+        if [[ -n "$pod" ]]; then
+            # Probe over the cluster-internal TCP service (postgres) instead of
+            # the pod-local unix socket: socket auth is peer/trust-bound and can
+            # reject non-superuser roles, while TCP uses the managed roles'
+            # password credentials.
+            if kubectl exec -n "$NAMESPACE" "$pod" -- env \
+                    PGPASSWORD="$PG_ADMIN_PASSWORD" psql -U "$PG_ADMIN_USER" \
+                    -h postgres -d bank_control -tAc \
+                    "SELECT 1 FROM pg_database WHERE datname='${db}'" \
+                    2>/dev/null | grep -q "^ *1$"; then
+                return 0
+            fi
+            last_err="$(kubectl exec -n "$NAMESPACE" "$pod" -- env \
+                    PGPASSWORD="$PG_ADMIN_PASSWORD" psql -U "$PG_ADMIN_USER" \
+                    -h postgres -d bank_control -tAc \
+                    "SELECT 1 FROM pg_database WHERE datname='${db}'" \
+                    2>&1 >/dev/null | head -n1 || true)"
         fi
         attempt=$((attempt + 1))
+        (( attempt % 12 == 0 )) && echo "... still waiting for CNPG database '${db}' (${attempt}/120 probes)"
         sleep 5
     done
-    fail "CNPG database '${db}' was not created within 300s"
+    fail "CNPG database '${db}' was not created within 600s. Last probe error: ${last_err}"
 }
 
 for db in account_service_database bill_service_database deposit_service_database notification_service_database keycloak_database; do
