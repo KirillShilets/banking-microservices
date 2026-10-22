@@ -94,7 +94,7 @@ jobs:
         if: steps.filter.outputs.code == 'true'
         env:
           ENV_FILE: "${{ env.ENV_FILE }}"
-          REALM_FILE: "$RUNNER_TEMP/bank-realm-ci.json"
+          REALM_FILE: "${{ runner.temp }}/bank-realm-ci.json"
           IMAGE_TAG: "1.0-SNAPSHOT"
           CLUSTER_NAME: bank-ci
         run: bash deploy/kind/bootstrap.sh

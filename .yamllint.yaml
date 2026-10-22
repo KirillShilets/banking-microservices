@@ -14,6 +14,9 @@ ignore: |
 rules:
   document-start: disable
   line-length: disable
+  # The repository historically stores files without a trailing newline; keep
+  # the policy explicit so CI does not rewrite untouched files.
+  new-line-at-end-of-file: disable
   comments:
     min-spaces-from-content: 1
   truthy:
