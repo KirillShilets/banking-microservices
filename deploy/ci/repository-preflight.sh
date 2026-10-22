@@ -2,9 +2,10 @@
 # Validate repository invariants before CI starts expensive jobs.
 set -Eeuo pipefail
 
-readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && (pwd -W 2>/dev/null || pwd -P))"
-readonly WORKFLOW_DIR="$REPO_ROOT/.github/workflows"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIR
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && (pwd -W 2>/dev/null || pwd -P))"
+readonly REPO_ROOT
 
 fail() {
     printf 'ERROR: %s\n' "$*" >&2
