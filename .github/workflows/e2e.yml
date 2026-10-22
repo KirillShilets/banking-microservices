@@ -1,0 +1,126 @@
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    # Run e2e only when the diff touches code, deployment or chart files.
+    paths:
+      - '**/*.java'
+      - '**/*.gradle'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - 'Dockerfile*'
+      - 'frontend/**'
+      - 'deploy/**'
+      - 'helm/**'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ENV_FILE: .env.ci
+
+jobs:
+  e2e:
+    name: End-to-end (kind + smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Filter changed code paths
+        id: filter
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        with:
+          filters: |
+            code:
+              - '**/*.java'
+              - '**/*.gradle'
+              - '**/*.yml'
+              - '**/*.yaml'
+              - 'Dockerfile*'
+              - 'frontend/**'
+              - 'deploy/**'
+              - 'helm/**'
+
+      - name: Skip when no code changes
+        if: steps.filter.outputs.code == 'false'
+        run: echo "No code changes; skipping e2e"
+
+      - name: Set up Helm
+        if: steps.filter.outputs.code == 'true'
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
+        with:
+          version: v3.16.4
+
+      - name: Set up kind cluster
+        if: steps.filter.outputs.code == 'true'
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1
+        with:
+          install_only: 'true'
+          cluster_name: bank-ci
+          version: v0.24.0
+          config: deploy/kind/kind-cluster-ci.yaml
+
+      - name: Generate CI .env
+        if: steps.filter.outputs.code == 'true'
+        run: bash deploy/ci/gen-env.sh "$ENV_FILE"
+
+      - name: Generate CI smoke credentials
+        if: steps.filter.outputs.code == 'true'
+        run: |
+          # Fresh random password per run; never reuse demo credentials.
+          echo "CI_PASS=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+
+      - name: Overlay CI realm (ci-smoke client, no TLS, random creds)
+        if: steps.filter.outputs.code == 'true'
+        env:
+          REALM_USER_PASSWORD: ${{ env.CI_PASS }}
+        run: |
+          jq -f deploy/ci/realm-overlay.jq keycloak/import/bank-realm-realm.json \
+            > "$RUNNER_TEMP/bank-realm-ci.json"
+          echo "Overlay produced:"
+          jq '.sslRequired, [.clients[] | select(.clientId=="ci-smoke") | .clientId]' \
+            "$RUNNER_TEMP/bank-realm-ci.json"
+
+      - name: Bootstrap platform (cluster, operators, infra, images, helm)
+        if: steps.filter.outputs.code == 'true'
+        env:
+          ENV_FILE: "${{ env.ENV_FILE }}"
+          REALM_FILE: "$RUNNER_TEMP/bank-realm-ci.json"
+          IMAGE_TAG: "1.0-SNAPSHOT"
+          CLUSTER_NAME: bank-ci
+        run: bash deploy/kind/bootstrap.sh
+
+      - name: Run smoke tests
+        if: steps.filter.outputs.code == 'true'
+        env:
+          CI_USER: customer.kira
+          # Random CI realm password generated earlier in this workflow.
+          CI_PASS: ${{ env.CI_PASS }}
+          KEYCLOAK_URL: "http://keycloak.localhost:18080"
+        run: bash deploy/ci/smoke.sh
+
+      - name: Collect troubleshooting info on failure
+        if: failure() && steps.filter.outputs.code == 'true'
+        run: |
+          echo "===== PODS -A ====="
+          kubectl get pods -A || true
+          echo "===== EVENTS ====="
+          kubectl get events -A --sort-by=.metadata.creationTimestamp || true
+          echo "===== DEPLOY LOGS ====="
+          for d in bank-account-service bank-bill-service bank-deposit-service bank-notification-service bank-gateway-service bank-frontend; do
+            echo "----- $d -----"
+            kubectl -n bank logs deployment/$d --tail=100 || true
+          done
+
+      - name: Delete kind cluster
+        if: always() && steps.filter.outputs.code == 'true'
+        run: kind delete cluster --name bank-ci || true
