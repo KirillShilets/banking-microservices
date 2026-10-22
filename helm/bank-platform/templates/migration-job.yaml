@@ -41,9 +41,12 @@ spec:
           # Preserve the image ENTRYPOINT (sh -c "exec java $JAVA_OPTS -jar app.jar")
           # and append the migration CLI args as "$@". CNPG creates the managed
           # databases asynchronously after its Database CR is applied, so retry
-          # the migration for a while before giving up (pod-level backoff then
-          # applies per backoffLimit).
-          command: ["sh", "-c", "set -e; for attempt in $(seq 1 12); do if java $JAVA_OPTS -jar app.jar \"$@\"; then exit 0; fi; echo \"migration attempt ${attempt}/12 failed; retrying in 10s\" >&2; sleep 10; done; exit 1"]
+          # the migration for a short bounded window before giving up (pod-level
+          # backoff still applies per backoffLimit, and a hook Job that spins too
+          # long makes `helm install --wait` time out). Keep the loop cheap: a
+          # JVM migration attempt takes tens of seconds, so 5 attempts with 5s
+          # sleep is ~2-4 minutes of worst-case retry.
+          command: ["sh", "-c", "set -e; for attempt in $(seq 1 5); do if java $JAVA_OPTS -jar app.jar \"$@\"; then exit 0; fi; rc=$?; echo \"migration attempt ${attempt}/5 failed (exit ${rc}); retrying in 5s\" >&2; sleep 5; done; exit 1"]
           args:
             - --spring.profiles.active=kubernetes,migrate
             - --spring.liquibase.enabled=true
