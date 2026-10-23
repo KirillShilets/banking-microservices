@@ -1,5 +1,7 @@
 plugins {
-    id 'org.springframework.boot' version '3.5.6' apply false
+    // 3.5.15: pins Spring Security 6.5.11 (fixes GHSA-mf92-479x-3373,
+    // GHSA-293q-567p-wmwq, GHSA-x2r2-rvhq-2mqv) and Spring Framework 6.2.19.
+    id 'org.springframework.boot' version '3.5.15' apply false
     id 'io.spring.dependency-management' version '1.1.6' apply false
     id 'io.freefair.lombok' version '8.10' apply false
     id 'com.github.spotbugs' version '6.0.26' apply false
