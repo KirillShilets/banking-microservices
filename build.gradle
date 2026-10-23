@@ -23,6 +23,14 @@ allprojects {
     version = '1.0-SNAPSHOT'
 }
 
+// Spring Boot 3.5.15 BOM pins Tomcat 10.1.55, which is vulnerable to:
+//   GHSA-gcx9-497g-6cp6 (improper access control / incorrect authorization),
+//   GHSA-9xv2-5v5q-p794 (DIGEST auth bypass via capture-replay),
+//   GHSA-h3x4-894j-xpx5 (FORM auth incorrect authorization).
+// All three are fixed in 10.1.58; 10.1.58 is missing from Maven Central, so
+// use the 10.1.59 release that contains the same fixes.
+ext['tomcat.version'] = '10.1.59'
+
 def integrationTestPatterns = [
     '**/*IntegrationTest',
     '**/*RepositoryUnitTest',
