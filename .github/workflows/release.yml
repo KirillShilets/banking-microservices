@@ -11,9 +11,6 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
-  attestations: write
 
 env:
   JAVA_VERSION: '17'

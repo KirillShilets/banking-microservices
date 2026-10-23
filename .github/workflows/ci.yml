@@ -136,7 +136,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
@@ -283,9 +283,9 @@ jobs:
       - name: Lint GitHub Actions workflows (actionlint)
         run: |
           set -euo pipefail
-          curl -fsSL -o /tmp/actionlint_1.7.12_linux_amd64.tar.gz \
+          curl -fsSL --proto '=https' --proto-redir '=https' -o /tmp/actionlint_1.7.12_linux_amd64.tar.gz \
             https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
-          curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_checksums.txt \
+          curl -fsSL --proto '=https' --proto-redir '=https' https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_checksums.txt \
             | grep -F 'actionlint_1.7.12_linux_amd64.tar.gz' > /tmp/actionlint-checksums.txt
           (cd /tmp && sha256sum -c actionlint-checksums.txt)
           tar -xzf /tmp/actionlint_1.7.12_linux_amd64.tar.gz -C /tmp actionlint
@@ -297,7 +297,7 @@ jobs:
       - name: Lint YAML files (yamllint)
         run: |
           set -euo pipefail
-          pip install --quiet 'yamllint==1.35.1'
+          pip install --quiet --only-binary :all: 'yamllint==1.35.1'
           yamllint -c .yamllint.yaml .github/workflows helm deploy
 
   helm-validate:
@@ -556,7 +556,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
         working-directory: frontend
 
       - name: Download frontend coverage report

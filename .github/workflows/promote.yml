@@ -67,9 +67,9 @@ jobs:
           # Install yq from official release assets, verifying the published
           # SHA-256 checksum before executing anything downloaded.
           YQ_VERSION="v4.35.1"
-          curl -fsSL -o /tmp/yq.tar.gz \
+          curl -fsSL --proto '=https' --proto-redir '=https' -o /tmp/yq.tar.gz \
             "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64.tar.gz"
-          curl -fsSL -o /tmp/yq.tar.gz.sha256 \
+          curl -fsSL --proto '=https' --proto-redir '=https' -o /tmp/yq.tar.gz.sha256 \
             "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64.tar.gz.sha256"
           (cd /tmp && sha256sum -c yq.tar.gz.sha256)
           tar -xzf /tmp/yq.tar.gz -C /tmp yq
