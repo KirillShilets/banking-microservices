@@ -515,6 +515,7 @@ jobs:
 
       - name: Run Sonar analysis and wait for Quality Gate
         run: |
+          echo "Sonar project key: ${SONAR_PROJECT_KEY:-kirillshilets_banking-microservices}"
           args=(-Dsonar.qualitygate.wait=true)
           if [ -n "${PR_NUMBER:-}" ]; then
             args+=("-Dsonar.pullrequest.key=${PR_NUMBER}")

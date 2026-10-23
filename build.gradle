@@ -173,12 +173,12 @@ subprojects {
 
 sonar {
     properties {
-        property 'sonar.projectKey', System.getenv('SONAR_PROJECT_KEY') ?: 'spring-cloud-banking-system'
-        property 'sonar.projectName', 'spring-cloud-banking-system'
+        property 'sonar.projectKey', System.getenv('SONAR_PROJECT_KEY') ?: 'kirillshilets_banking-microservices'
+        property 'sonar.projectName', 'banking-microservices'
         property 'sonar.sourceEncoding', 'UTF-8'
         property 'sonar.exclusions', '**/src/main/resources/**,**/build/**'
         property 'sonar.coverage.jacoco.xmlReportPaths', subprojects.collect {
-            new File(it.projectDir, 'build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml').absolutePath
+            new File(it.projectDir, 'build/reports/jacoco/test/jacocoTestReport.xml').absolutePath
         }.join(',') + ',' + subprojects.collect {
             new File(it.projectDir, 'build/reports/jacoco/jacocoIntegrationTestReport/jacocoIntegrationTestReport.xml').absolutePath
         }.join(',') + ',' + subprojects.collect {
