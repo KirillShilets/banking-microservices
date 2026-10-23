@@ -39,14 +39,18 @@ spec:
           image: {{ include "bank-platform.image" (dict "name" $name "svc" $svc "root" $) | quote }}
           imagePullPolicy: {{ include "bank-platform.imagePullPolicy" (dict "svc" $svc "root" $) }}
           # Preserve the image ENTRYPOINT (sh -c "exec java $JAVA_OPTS -jar app.jar")
-          # and append the migration CLI args as "$@". CNPG creates the managed
-          # databases asynchronously after its Database CR is applied, so retry
-          # the migration for a short bounded window before giving up (pod-level
-          # backoff still applies per backoffLimit, and a hook Job that spins too
-          # long makes `helm install --wait` time out). Keep the loop cheap: a
-          # JVM migration attempt takes tens of seconds, so 5 attempts with 5s
-          # sleep is ~2-4 minutes of worst-case retry.
-          command: ["sh", "-c", "set -e; for attempt in $(seq 1 5); do if java $JAVA_OPTS -jar app.jar \"$@\"; then exit 0; fi; rc=$?; echo \"migration attempt ${attempt}/5 failed (exit ${rc}); retrying in 5s\" >&2; sleep 5; done; exit 1"]
+          # and append the migration CLI args as "$@". Run the migration in the
+          # isolated LiquibaseMigrationApplication context (common-lib) instead
+          # of the full service application: the full web/controller stack
+          # requires request-scoped security beans (AuthenticatedUser) that do
+          # not exist in a headless migration context, so it fails before
+          # Liquibase runs. CNPG creates the managed databases asynchronously
+          # after its Database CR is applied, so retry for a short bounded
+          # window before giving up (pod-level backoff still applies per
+          # backoffLimit). Keep the loop cheap: a JVM migration attempt takes
+          # tens of seconds, so 5 attempts with 5s sleep is ~2-4 minutes of
+          # worst-case retry.
+          command: ["sh", "-c", "set -e; for attempt in $(seq 1 5); do if java $JAVA_OPTS -Dloader.main=org.bank.migration.LiquibaseMigrationApplication -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher \"$@\"; then exit 0; fi; rc=$?; echo \"migration attempt ${attempt}/5 failed (exit ${rc}); retrying in 5s\" >&2; sleep 5; done; exit 1"]
           args:
             - --spring.profiles.active=kubernetes,migrate
             - --spring.liquibase.enabled=true
