@@ -55,10 +55,16 @@ done
 # If another port-forward is already serving on LOCAL_PORT, reuse it
 # instead of spawning a duplicate (avoids "bind: address already in use").
 # Detect whether a port-forward is already listening.
-# We cannot use `if curl ... | grep` under set -e (curl exit 23 is non-zero
-# on msys2/git-bash), so capture the HTTP code in a temporary variable first.
-_http_code=$(curl -s -o NUL -w '%{http_code}' "http://127.0.0.1:${LOCAL_PORT}/healthz" 2>/dev/null)
-case "${_http_code:-000}" in
+# We cannot use `if curl ... | grep` under set -e: any curl failure (exit
+# 7 connection refused, exit 23 on msys2/git-bash) would abort the script
+# before we get a chance to start the port-forward. The probe therefore
+# always prints an HTTP code, mapping failures to 000.
+probe_health() {
+    curl -s -o /dev/null -w '%{http_code}' \
+        "http://127.0.0.1:${LOCAL_PORT}/healthz" 2>/dev/null || echo 000
+}
+
+case "$(probe_health)" in
     200)
         echo "==> Using existing port-forward on :${LOCAL_PORT}"
         PF_PID=""
@@ -69,8 +75,7 @@ case "${_http_code:-000}" in
         PF_PID=$!
         trap 'kill "$PF_PID" 2>/dev/null || true' EXIT
         for i in $(seq 1 20); do
-            _rc=$(curl -s -o NUL -w '%{http_code}' "http://127.0.0.1:${LOCAL_PORT}/healthz" 2>/dev/null)
-            [[ "$_rc" == "200" ]] && break
+            [[ "$(probe_health)" == "200" ]] && break
             [[ "$i" -lt 20 ]] || { echo "FAIL: port-forward not serving"; cat /tmp/port-forward.log; exit 1; }
             sleep 1
         done
