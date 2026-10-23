@@ -54,6 +54,13 @@ subprojects {
             // Spring Boot 3.5.x BOM pins FreeMarker 2.3.34, which is vulnerable
             // to path traversal (GHSA-27j2-h3m2-8237 / CVE-2026-84939).
             dependency 'org.freemarker:freemarker:2.3.35'
+            // Bouncy Castle 1.80.2, pulled in transitively by
+            // spring-cloud-netflix-eureka-client, is vulnerable to:
+            //   GHSA-9pwp-9qqc-pr26 (name constraints bypass, critical),
+            //   GHSA-qp49-qgx5-5m26 (lazy ASN.1 nesting-depth guard reset),
+            //   GHSA-c3fc-8qff-9hwx (LDAP injection).
+            // All three are fixed in 1.85 (1.84 covers the LDAP one).
+            dependency 'org.bouncycastle:bcprov-jdk18on:1.85'
         }
     }
 
