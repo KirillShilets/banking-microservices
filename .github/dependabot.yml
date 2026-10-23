@@ -1,0 +1,57 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Pin security: Dependabot opens PRs that move `@vX` -> `@sha <vX>` comments
+    open-pull-request-limit: 10
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-request-limit: 10
+
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-request-limit: 10
+
+  - package-ecosystem: docker
+    directory: /account-service
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /bill-service
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /deposit-service
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /notification-service
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /gateway-service
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /config-service
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /discovery-service
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /deploy/k8s/infra/minio
+    schedule:
+      interval: weekly

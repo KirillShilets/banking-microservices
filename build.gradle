@@ -1,8 +1,15 @@
 plugins {
-    id 'org.springframework.boot' version '3.5.6' apply false
+    // 3.5.15: pins Spring Security 6.5.11 (fixes GHSA-mf92-479x-3373,
+    // GHSA-293q-567p-wmwq, GHSA-x2r2-rvhq-2mqv) and Spring Framework 6.2.19.
+    id 'org.springframework.boot' version '3.5.15' apply false
     id 'io.spring.dependency-management' version '1.1.6' apply false
     id 'io.freefair.lombok' version '8.10' apply false
+    id 'com.github.spotbugs' version '6.0.26' apply false
+    id 'com.diffplug.spotless' version '6.25.0' apply false
+    id 'org.sonarqube' version '7.5.0.8588' apply false
 }
+
+apply plugin: 'org.sonarqube'
 
 group = 'org.bank'
 version = '1.0-SNAPSHOT'
@@ -16,9 +23,20 @@ allprojects {
     version = '1.0-SNAPSHOT'
 }
 
+def integrationTestPatterns = [
+    '**/*IntegrationTest',
+    '**/*RepositoryUnitTest',
+    '**/ConfigApplicationTests',
+    '**/DiscoveryApplicationTests',
+    '**/GatewayApplicationTests'
+]
+
 subprojects {
     apply plugin: 'java'
     apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'jacoco'
+    apply plugin: 'com.github.spotbugs'
+    apply plugin: 'com.diffplug.spotless'
 
     java {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -30,11 +48,164 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom "org.springframework.cloud:spring-cloud-dependencies:2025.0.0"
+            mavenBom "org.springframework.cloud:spring-cloud-dependencies:2025.0.3"
+        }
+        dependencies {
+            // Spring Boot 3.5.x BOM pins FreeMarker 2.3.34, which is vulnerable
+            // to path traversal (GHSA-27j2-h3m2-8237 / CVE-2026-84939).
+            dependency 'org.freemarker:freemarker:2.3.35'
+            // Bouncy Castle 1.80.2, pulled in transitively by
+            // spring-cloud-netflix-eureka-client, is vulnerable to:
+            //   GHSA-9pwp-9qqc-pr26 (name constraints bypass, critical),
+            //   GHSA-qp49-qgx5-5m26 (lazy ASN.1 nesting-depth guard reset),
+            //   GHSA-c3fc-8qff-9hwx (LDAP injection).
+            // All three are fixed in 1.85 (1.84 covers the LDAP one).
+            dependency 'org.bouncycastle:bcprov-jdk18on:1.85'
         }
     }
 
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
+        testLogging {
+            events 'failed', 'skipped'
+            exceptionFormat 'full'
+        }
+        filter {
+            // Modules without integration test classes must not fail the build.
+            failOnNoMatchingTests = false
+        }
+    }
+
+    tasks.named('test') {
+        filter {
+            integrationTestPatterns.each { pattern ->
+                excludeTestsMatching pattern
+            }
+        }
+    }
+
+    def integrationTest = tasks.register('integrationTest', Test) {
+        description = 'Runs Spring context, persistence, and Testcontainers integration tests.'
+        group = 'verification'
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        shouldRunAfter tasks.named('test')
+        filter {
+            integrationTestPatterns.each { pattern ->
+                includeTestsMatching pattern
+            }
+        }
+    }
+
+    jacoco {
+        toolVersion = '0.8.12'
+    }
+
+    tasks.named('jacocoTestReport') {
+        dependsOn tasks.named('test'), integrationTest
+        executionData fileTree("${buildDir}/jacoco").include('*.exec')
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
+        description = 'Generates JaCoCo XML and HTML reports for integration tests.'
+        group = 'verification'
+        dependsOn integrationTest
+        executionData fileTree("${buildDir}/jacoco").include('integrationTest.exec')
+        sourceSets sourceSets.main
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    // CI-only task: regenerates the JaCoCo XML reports from execution data that
+    // was shipped as an artifact, without re-running any tests. Unlike
+    // jacocoTestReport/jacocoIntegrationTestReport it has no test dependencies,
+    // so it works even when 'test'/'integrationTest' are excluded on the runner.
+    tasks.register('jacocoXmlReportsFromExec', org.gradle.testing.jacoco.tasks.JacocoReport) {
+        description = 'Generates JaCoCo XML/HTML reports from existing execution data without running tests.'
+        group = 'verification'
+        executionData fileTree("${buildDir}/jacoco").include('*.exec')
+        sourceSets sourceSets.main
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    spotbugs {
+        ignoreFailures = false
+        excludeFilter = file("${rootDir}/config/spotbugs/exclude.xml")
+    }
+
+    tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
+        reports {
+            xml.required = true
+        }
+    }
+
+    spotless {
+        java {
+            removeUnusedImports()
+            trimTrailingWhitespace()
+            // Intentionally no endWithNewline(): the repository historically
+            // contains files without a trailing newline and we keep the diff
+            // minimal — enforced trailing newlines would rewrite dozens of
+            // untouched files on every first run.
+        }
+    }
+
+    // Coverage gate ONLY for services that are deployed and have tests.
+    // config-service and discovery-service do not deploy and have no meaningful
+    // test coverage — the gate would fail those modules.
+    if (name in ['account-service', 'bill-service', 'deposit-service', 'notification-service', 'gateway-service']) {
+        tasks.named('jacocoTestCoverageVerification') {
+            dependsOn tasks.named('test'), integrationTest
+            executionData fileTree("${buildDir}/jacoco").include('*.exec')
+            violationRules {
+                rule {
+                    limit {
+                        counter = 'LINE'
+                        value = 'COVEREDRATIO'
+                        minimum = 0.60
+                    }
+                }
+            }
+        }
+        check.dependsOn tasks.named('jacocoTestCoverageVerification')
+    }
+}
+
+sonar {
+    properties {
+        property 'sonar.projectKey', System.getenv('SONAR_PROJECT_KEY') ?: 'kirillshilets_banking-microservices'
+        property 'sonar.projectName', 'banking-microservices'
+        property 'sonar.sourceEncoding', 'UTF-8'
+        property 'sonar.exclusions', '**/src/main/resources/**,**/build/**'
+        property 'sonar.coverage.jacoco.xmlReportPaths', subprojects.collect {
+            new File(it.projectDir, 'build/reports/jacoco/test/jacocoTestReport.xml').absolutePath
+        }.join(',') + ',' + subprojects.collect {
+            new File(it.projectDir, 'build/reports/jacoco/jacocoIntegrationTestReport/jacocoIntegrationTestReport.xml').absolutePath
+        }.join(',') + ',' + subprojects.collect {
+            new File(it.projectDir, 'build/reports/jacoco/jacocoXmlReportsFromExec/jacocoXmlReportsFromExec.xml').absolutePath
+        }.join(',')
+        property 'sonar.java.binaries', subprojects.collect {
+            new File(it.projectDir, 'build/classes/java/main').absolutePath
+        }.join(',')
+        property 'sonar.junit.reportPaths', subprojects.collect {
+            [new File(it.projectDir, 'build/test-results/test').absolutePath,
+             new File(it.projectDir, 'build/test-results/integrationTest').absolutePath]
+        }.flatten().join(',')
+        property 'sonar.java.spotbugs.reportPaths', subprojects.collect {
+            new File(it.projectDir, 'build/reports/spotbugs/main.xml').absolutePath
+        }.join(',')
+        System.getenv('SONAR_HOST_URL')?.with { hostUrl ->
+            property 'sonar.host.url', hostUrl
+        }
+        property 'sonar.organization', System.getenv('SONAR_ORGANIZATION') ?: 'kirillshilets'
     }
 }

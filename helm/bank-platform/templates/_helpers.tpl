@@ -179,8 +179,8 @@ Usage: {{ include "bank-platform.validateServices" $ }}
 {{- define "bank-platform.validateProduction" -}}
 {{- if eq .Values.global.environment "prod" -}}
 {{- $serializedValues := toJson .Values -}}
-{{- if regexMatch "(?i)(REPLACE_ME|HOST_IP|xxxx|example\\.com)" $serializedValues -}}
-{{- fail "production values contain a placeholder; replace example hosts, registry, and addresses before rendering" -}}
+{{- if regexMatch "(?i)(REPLACE_ME|HOST_IP|xxxx|<[^>]+>)" $serializedValues -}}
+{{- fail "production values contain a placeholder; replace xxxx / HOST_IP / REPLACE_ME / empty templated values before rendering" -}}
 {{- end -}}
 {{- range $name, $svc := .Values.services -}}
 {{- if $svc.enabled -}}

@@ -1,0 +1,13 @@
+{{- if .Values.services.frontend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bank-frontend-runtime-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "bank-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  config.js: |
+    window.__APP_CONFIG__ = {{ .Values.frontendConfig | toJson }};
+{{- end }}

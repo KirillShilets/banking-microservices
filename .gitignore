@@ -1,13 +1,16 @@
 .gradle
 .gradle-work/
-gradle
-build/
+gradle/*
+!gradle/wrapper/
 !gradle/wrapper/gradle-wrapper.jar
+build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 mail-props.properties
 .env*
 !.env.example
+.codex/
+rendered.yaml
 
 ### IntelliJ IDEA ###
 .idea/
@@ -42,3 +45,7 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Frontend test coverage ###
+frontend/coverage/
+BOOT-INF/

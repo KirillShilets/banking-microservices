@@ -1,0 +1,14 @@
+# Gitleaks configuration - secrets detection for the repository.
+# Base rules from gitleaks defaults are loaded automatically; this file only
+# extends defaults and sets the allowlist.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Legitimate files that contain demo credentials for the test/demo environment"
+paths = [
+    '''keycloak/import/bank-realm-realm\.json''',
+    '''\.env\.example$''',
+    '''\.release-please-manifest\.json$''',
+]

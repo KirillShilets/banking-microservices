@@ -8,7 +8,6 @@ import org.bank.bill.messaging.NotificationCommandGateway;
 import org.bank.bill.repository.BillRepository;
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.dto.request.BillRequestDTO;
-import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,12 +30,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.greaterThan;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt; // <-- новый
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;

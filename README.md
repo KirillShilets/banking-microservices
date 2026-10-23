@@ -202,7 +202,39 @@ npm run lint
 npm run build
 ~~~
 
-## 🗂️ Структура репозитория
+## 🚀 CI/CD: production-пайплайн
+
+ Полный пайплайн описан в `.github/workflows/`; текущая спецификация — в `CICD_SETUP.txt`.
+
+ ### Quality gates (обязательные для merge/release)
+
+ - **Backend**: `./gradlew clean check` (unit + integration с Testcontainers, SpotBugs c `ignoreFailures=false`, Spotless, JaCoCo gate 60% строк на деплоящихся сервисах);
+ - **Frontend**: `npm ci`, eslint, vitest с coverage-порогами, `npm audit --omit=dev --audit-level=high`, build;
+ - **SonarQube**: analysis для backend и frontend, ожидание Quality Gate (`sonar.qualitygate.wait=true`), fail-closed при отсутствии `SONAR_HOST_URL`/`SONAR_TOKEN`;
+ - **Security**: Gitleaks (вся история), CodeQL (Java + TS), dependency-review, Trivy (filesystem HIGH/CRITICAL), Checkov (rendered-манифесты Kubernetes);
+ - **Static/структура**: hadolint, ShellCheck, actionlint (с проверкой checksum), yamllint, `deploy/ci/repository-preflight.sh`;
+ - **Helm/K8s**: `helm lint` всех values, render комбинаций Argo (kind/staging/prod), kubeconform `-strict`, запрет placeholder-значений в staging/prod output.
+
+ ### Необходимая настройка GitHub
+
+ - Secrets используются `SONAR_HOST_URL`, `SONAR_TOKEN` (и `BOT_TOKEN` для release-please);
+ - Variables: `SONAR_PROJECT_KEY` (опционально);
+ - Environments: `staging`, `production` — для production включить required reviewers и защиту от обхода;
+ - Branch protection на `main`: required status check **CI gate** + review (см. `deploy/ci/protect-main.sh`).
+
+ ### Release / promotion flow
+
+ 1. merge в `main` → release-please создаёт PR с bump версии и тег `v*`;
+ 2. `release.yml`: guard-проверка (тег = HEAD main), сборка образов по SHA, сканирование опубликованного digest, подпись Cosign keyless, аттестация provenance/SBOM, тег `v*` → тот же digest;
+ 3. `promote.yml`: staging — PR с digest в `values-staging.yaml`; production — после approval environment, digest в `values-prod.yaml` и push в ветку `promote/prod`, которую отслеживает Argo CD;
+ 4. Argo CD: staging `automated` (prune + selfHeal); prod — ручная синхронизация.
+
+ ### Известные ограничения
+
+ - `values-managed.yaml` — scaffold управляемой среды (инфраструктурные имена должны быть заменены до реального go-live);
+ - prod-значения используют `example.com`-домены: заменить на реальные перед внешней публикацией.
+
+| ## 🗂️ Структура репозитория
 
 ~~~text
 account-service/       аккаунты и владельцы аккаунтов

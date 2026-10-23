@@ -54,6 +54,12 @@ serviceAccount:
 
 fullnameOverride: bank
 
+frontendConfig:
+  KEYCLOAK_URL: "http://keycloak.localhost"
+  KEYCLOAK_REALM: "bank-realm"
+  KEYCLOAK_CLIENT_ID: "banking-frontend"
+  GATEWAY_URL: "http://api.localhost"
+
 servicePorts:
   config-service: 8001
   discovery-service: 8761
@@ -62,7 +68,7 @@ servicePorts:
   deposit-service: 8083
   notification-service: 9999
   gateway-service: 8989
-  frontend: 80
+  frontend: 8080
 
 probes:
   startup:
@@ -108,10 +114,10 @@ resources:
   frontend:
     requests:
       cpu: 10m
-      memory: 32Mi
+      memory: 64Mi
     limits:
       cpu: 100m
-      memory: 32Mi
+      memory: 64Mi
 
 applicationConfig:
   enabled: true
@@ -162,6 +168,7 @@ services:
   account-service:
     enabled: true
     component: backend
+    database: true
     replicas: 2
     image:
       repository: bank/account-service
@@ -198,6 +205,7 @@ services:
   bill-service:
     enabled: true
     component: backend
+    database: true
     replicas: 2
     image:
       repository: bank/bill-service
@@ -236,6 +244,7 @@ services:
   deposit-service:
     enabled: true
     component: backend
+    database: true
     replicas: 2
     image:
       repository: bank/deposit-service
@@ -272,6 +281,7 @@ services:
   notification-service:
     enabled: true
     component: backend
+    database: true
     replicas: 1
     image:
       repository: bank/notification-service
@@ -308,6 +318,16 @@ services:
             key: MAIL_USERNAME
       - name: MANAGEMENT_HEALTH_MAIL_ENABLED
         value: "false"
+      - name: SPRING_MAIL_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: MAIL_USERNAME
+      - name: SPRING_MAIL_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: bank-app-secrets
+            key: MAIL_PASSWORD
     service:
       enabled: true
       type: ClusterIP
@@ -317,6 +337,7 @@ services:
   gateway-service:
     enabled: true
     component: edge
+    database: false
     replicas: 2
     image:
       repository: bank/gateway-service
@@ -339,16 +360,21 @@ services:
   frontend:
     enabled: true
     component: edge
+    database: false
     replicas: 2
     image:
       repository: bank/frontend
-    containerPort: 80
+    containerPort: 8080
     env: {}
     extraVolumeMounts:
       - name: nginx-cache
         mountPath: /var/cache/nginx
       - name: nginx-run
         mountPath: /var/run
+      - name: frontend-runtime-config
+        mountPath: /usr/share/nginx/html/config.js
+        subPath: config.js
+        readOnly: true
     extraVolumes:
       - name: nginx-cache
         emptyDir:
@@ -356,14 +382,18 @@ services:
       - name: nginx-run
         emptyDir:
           sizeLimit: 8Mi
+      - name: frontend-runtime-config
+        configMap:
+          name: bank-frontend-runtime-config
+          defaultMode: 0444
     resources: {}
     probes:
       startup:
         enabled: false
       readiness:
-        path: /
+        path: /healthz
       liveness:
-        path: /
+        path: /healthz
     service:
       enabled: true
       type: ClusterIP
@@ -383,3 +413,10 @@ ingress:
   className: nginx
   annotations: {}
   tls: []
+
+networkPolicies:
+  enabled: true
+
+# Each service that has a database must set database: true
+# to get the Liquibase migration hook deployed.
+# Services without a database (gateway, frontend) omit it or set false.

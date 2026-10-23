@@ -1,0 +1,30 @@
+{{- if .Values.networkPolicies.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bank-platform.fullname" . }}-default-deny
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  egress:
+    # DNS always needed (cluster DNS lives in kube-system)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # Infrastructure namespace (postgres/rabbitmq/keycloak). In kind this is the
+    # chart's own namespace; in managed clusters it can be a dedicated repo/
+    # infra namespace via .Values.global.infraNamespace.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.infraNamespace | default .Release.Namespace }}
+      ports:
+        - { protocol: TCP, port: 5432 }
+        - { protocol: TCP, port: 5672 }
+        - { protocol: TCP, port: 8080 }
+{{- end }}

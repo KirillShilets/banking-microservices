@@ -7,6 +7,12 @@ eureka:
     registry-fetch-interval-seconds: 10
 
 spring:
+  # In Kubernetes, migrations run only via the Helm pre-upgrade/pre-install Job
+  # (templates/migration-job.yaml) with the "migrate" profile. App pods must never
+  # take the Liquibase changelog lock themselves (replicas would race and could
+  # leave a stale lock). Local runs/tests keep the default (enabled) behavior.
+  liquibase:
+    enabled: false
   security:
     oauth2:
       resourceserver:

@@ -1,0 +1,24 @@
+# CI/e2e variant of kind-cluster.yaml.
+#
+# Differences from kind-cluster.yaml (used for local dev):
+#   - no extraPortMappings: CI reaches the ingress via kubectl port-forward
+#     (smoke.sh), so ports 80/443 stay free for a local kind cluster running
+#     side by side.
+#   - single control-plane node: CI does not need the scheduling spread of
+#     extra workers, and it halves the RAM/CPU footprint of the runner.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            # ingress-nginx's kind manifest selects on this label.
+            node-labels: "ingress-ready=true"
+
+networking:
+  disableDefaultCNI: false
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"

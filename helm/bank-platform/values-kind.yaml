@@ -2,8 +2,6 @@ global:
   keycloak:
     issuerUri: "http://keycloak.localhost/realms/bank-realm"
     jwkSetUri: "http://keycloak:8080/realms/bank-realm/protocol/openid-connect/certs"
-  keycloak:
-    jwkSetUri: "http://keycloak:8080/realms/bank-realm/protocol/openid-connect/certs"
   environment: kind
   imageRegistry: ""
   qosGuaranteed: false
@@ -46,10 +44,10 @@ resources:
   frontend:
     requests:
       cpu: 10m
-      memory: 24Mi
+      memory: 64Mi
     limits:
       cpu: 100m
-      memory: 24Mi
+      memory: 64Mi
 
 services:
   config-service:
@@ -70,7 +68,15 @@ services:
     env:
       MAIL_HOST: "smtp.gmail.com"
       MAIL_PORT: "587"
+      SPRING_MAIL_HOST: "smtp.gmail.com"
+      SPRING_MAIL_PORT: "587"
   gateway-service:
     replicas: 1
   frontend:
     replicas: 1
+
+networkPolicies:
+  # kindnet does not enforce NetworkPolicy; enable them anyway so the manifests
+  # render and are exercised. The namespace carries warn/audit PSA labels
+  # applied by bootstrap.sh/bootstrap.ps1.
+  enabled: true

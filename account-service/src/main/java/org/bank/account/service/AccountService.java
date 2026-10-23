@@ -1,7 +1,6 @@
 package org.bank.account.service;
 
 import org.bank.account.controller.dto.UpdateAccountResponseDTO;
-import org.bank.account.entity.Account;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.request.CreateBillRequestDTO;
 

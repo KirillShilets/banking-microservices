@@ -1,0 +1,1013 @@
+Ниже — конкретные патчи к файлам из этапов 0–7, закрывающие пункты **«До первого тега»** и часть **«До первого prod-деплоя»** из вашей таблицы приоритетов. Это большой объём, поэтому разобью на это сообщение и следующее. Каждый патч — это то, что добавить/заменить в уже написанных файлах, с указанием, где именно.
+
+---
+
+## Блок A. До первого тега (критично)
+
+### A1. `.dockerignore` в корне
+
+Сейчас `COPY . .` в Java-сервисах тащит в контекст весь монорепо, включая `.git`, `frontend/node_modules`, `helm`, `rendered.yaml`. Создайте `.dockerignore` в корне:
+
+```
+.git
+.gitattributes
+.gitignore
+.github
+.gitleaks.toml
+rendered.yaml
+*.md
+docs/
+helm/
+deploy/
+frontend/node_modules
+frontend/dist
+frontend/coverage
+**/build
+**/.gradle
+**/target
+.env
+.env.*
+!.env.example
+*.tgz
+```
+
+**Проверьте**: если какой-то Java Dockerfile реально делает `COPY helm/...` (маловероятно, но мало ли) — уберите соответствующую строку.
+
+### A2. `frontend/.dockerignore`
+
+```
+node_modules
+dist
+coverage
+.git
+.env
+.env.*
+!.env.example
+npm-debug.log*
+```
+
+### A3. Проверка context сборки — скрипт вместо гадания
+
+Добавьте `deploy/ci/check-dockerfile-context.sh`, запускайте его **до** первого тега вручную:
+
+```bash
+#!/usr/bin/env bash
+# Shows the first few COPY/ADD lines of every service Dockerfile so you can
+# confirm the build context in release.yml / bootstrap.sh matches reality.
+set -euo pipefail
+for f in account-service/Dockerfile bill-service/Dockerfile deposit-service/Dockerfile \
+         notification-service/Dockerfile gateway-service/Dockerfile frontend/Dockerfile; do
+  echo "== $f =="
+  grep -nE '^(COPY|ADD)' "$f" || echo "  (no COPY/ADD found)"
+  echo
+done
+```
+
+Если `COPY account-service/*.gradle ...` (путь от корня) — context должен быть `.`. Если `COPY build.gradle ...` (путь от папки сервиса) — context должен быть `account-service`, и тогда в `release.yml`/`bootstrap.sh` меняйте `context: "."` на `context: matrix.name`.
+
+### A4. `--server-side --force-conflicts` для операторов
+
+В `deploy/kind/bootstrap.sh` замените прямые `kubectl apply` для CRD-тяжёлых бандлов на обёртку:
+
+```bash
+# Add near the top, after step()/fail() definitions:
+kubectl_apply_crds() {
+  # CRD bundles (RabbitMQ, CNPG, cert-manager) exceed the 262144-byte
+  # last-applied-configuration annotation limit under client-side apply.
+  kubectl apply --server-side --force-conflicts -f "$1"
+}
+```
+
+И замените соответствующие строки:
+
+```bash
+# было:
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml
+# стало:
+kubectl_apply_crds https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml
+
+# было:
+kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.3/cluster-operator.yml
+# стало:
+kubectl_apply_crds https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.3/cluster-operator.yml
+
+# было:
+kubectl apply -f https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.0/messaging-topology-operator-with-certmanager.yaml
+# стало:
+kubectl_apply_crds https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.0/messaging-topology-operator-with-certmanager.yaml
+
+# было:
+kubectl apply -k "$INFRA_PATH/keycloak/operator"
+# стало (kustomize + server-side):
+kubectl apply --server-side --force-conflicts -k "$INFRA_PATH/keycloak/operator"
+```
+
+Для `helm upgrade --install` (cert-manager, cloudnative-pg) это не нужно — Helm сам не использует client-side apply в том же смысле, но если упадёте на `CRD too long` при `--set crds.enabled=true`, добавьте в helm-команды cert-manager флаг нет смысла, там CRD ставятся отдельно самим чартом корректно.
+
+### A5. GHCR: не делать пакеты публичными — pull secret
+
+Вместо совета «сделайте публичными», добавьте `deploy/ci/create-ghcr-pull-secret.sh`:
+
+```bash
+#!/usr/bin/env bash
+# Creates/updates an imagePullSecret for GHCR in the given namespace.
+# Usage: GHCR_USER=... GHCR_TOKEN=... bash create-ghcr-pull-secret.sh bank-staging
+set -euo pipefail
+NS="${1:?usage: create-ghcr-pull-secret.sh <namespace>}"
+: "${GHCR_USER:?set GHCR_USER}"
+: "${GHCR_TOKEN:?set GHCR_TOKEN (PAT with read:packages)}"
+
+kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret docker-registry ghcr-pull \
+  --docker-server=ghcr.io \
+  --docker-username="$GHCR_USER" \
+  --docker-password="$GHCR_TOKEN" \
+  --namespace "$NS" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+В `helm/bank-platform/values.yaml` добавьте (на верхнем уровне или в `global`, **ПРОВЕРЬТЕ**, как у вас устроен `_helpers.tpl` — ключ должен называться так, как ожидает шаблон):
+
+```yaml
+global:
+  imagePullSecrets:
+    - name: ghcr-pull
+```
+
+В `templates/deployment.yaml`, рядом с `spec.template.spec`, если там ещё нет `imagePullSecrets`, добавьте:
+
+```yaml
+{{- with .Values.global.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 8 }}
+{{- end }}
+```
+
+**ПРОВЕРЬТЕ отступ** — должен быть на уровне `containers:`, `volumes:` в том же `spec`.
+
+В `values-kind.yaml` эту секцию можно не задавать (локально образы грузятся через `kind load docker-image`, pull не нужен).
+
+### A6. Пиннинг actions по SHA — не вручную, а инструментом
+
+Гадать SHA бессмысленно и опасно (можно закрепить не ту версию). Добавьте шаг пиннинга как часть процесса, а не как захардкоженный список:
+
+`deploy/ci/pin-actions.sh`:
+
+```bash
+#!/usr/bin/env bash
+# Pins every `uses: owner/repo@vX` in .github/workflows to its commit SHA,
+# keeping the version as a trailing comment so Dependabot can still bump it.
+# Requires: https://github.com/stacklok/frizbee (or `gh` CLI as fallback below).
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+
+if command -v frizbee >/dev/null 2>&1; then
+  frizbee actions .github/workflows --quiet
+  exit 0
+fi
+
+echo "frizbee not found; falling back to manual gh-cli resolution" >&2
+for f in .github/workflows/*.yml; do
+  grep -oE 'uses: [^@]+@v[0-9][^ ]*' "$f" | sort -u | while read -r line; do
+    ref="${line#uses: }"
+    repo="${ref%@*}"; tag="${ref#*@}"
+    sha="$(gh api "repos/$repo/commits/$tag" --jq .sha 2>/dev/null || true)"
+    [ -n "$sha" ] || { echo "WARN: could not resolve $ref" >&2; continue; }
+    sed -i "s#uses: ${repo}@${tag}#uses: ${repo}@${sha} # ${tag}#g" "$f"
+  done
+done
+```
+
+Запуск: `bash deploy/ci/pin-actions.sh`, затем `git diff` — проверить, что версии не «уехали» (frizbee/gh резолвит тег в SHA **на момент запуска**, пересчитывайте при каждом обновлении). После пиннинга Dependabot (`package-ecosystem: github-actions`, уже заведён в этапе 5.4) сам будет открывать PR на обновление SHA с актуальным комментарием версии — это штатное поведение, ничего дополнительно настраивать не нужно.
+
+Сделайте этот скрипт частью чек-листа: **запускать перед каждым релизом цепочки `release.yml`**, пока не добавите политику, требующую пиннинга (можно добавить `actionlint`-плагин или grep-проверку в `ci.yml`):
+
+```yaml
+  # добавить job в ci.yml
+  actions-pinned:
+    name: Actions must be pinned by SHA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # сам этот checkout тоже запиньте после первого прогона pin-actions.sh
+      - run: |
+          if grep -rE 'uses: [^@]+@v[0-9]' .github/workflows/ | grep -v '#'; then
+            echo "Found workflow steps not pinned by commit SHA"; exit 1
+          fi
+```
+
+Добавьте `actions-pinned` в `needs` джобы `ci-success`.
+
+### A7. Trivy до push + деплой по digest (вместо мутабельного тега)
+
+Это самый важный патч — переписываю job `images` в `release.yml` целиком на схему «push sha-дайджест с аттестациями → скан по digest → только при успехе создать semver-тег на тот же digest → подписать digest»:
+
+```yaml
+  images:
+    name: Image ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      account-service: ${{ steps.collect.outputs.account-service }}
+      bill-service: ${{ steps.collect.outputs.bill-service }}
+      deposit-service: ${{ steps.collect.outputs.deposit-service }}
+      notification-service: ${{ steps.collect.outputs.notification-service }}
+      gateway-service: ${{ steps.collect.outputs.gateway-service }}
+      frontend: ${{ steps.collect.outputs.frontend }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: account-service,      context: ".",       file: account-service/Dockerfile }
+          - { name: bill-service,         context: ".",       file: bill-service/Dockerfile }
+          - { name: deposit-service,      context: ".",       file: deposit-service/Dockerfile }
+          - { name: notification-service, context: ".",       file: notification-service/Dockerfile }
+          - { name: gateway-service,      context: ".",       file: gateway-service/Dockerfile }
+          - { name: frontend,             context: frontend,  file: frontend/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Шаг 1: публикуем ТОЛЬКО по sha-тегу (неизменяемому), с provenance/SBOM.
+      # Семантический тег пока не существует — его некому использовать до скана.
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: ghcr.io/${{ env.OWNER }}/bank-${{ matrix.name }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          provenance: true
+          sbom: true
+
+      # Шаг 2: сканируем именно опубликованный digest, а не локальный tar.
+      - name: Scan image by digest
+        uses: aquasecurity/trivy-action@0.28.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ghcr.io/${{ env.OWNER }}/bank-${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      # Шаг 3: только если скан прошёл — присваиваем семантический тег
+      # тому же digest. Rebuild не нужен, манифест не меняется.
+      - name: Promote digest to release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          docker buildx imagetools create \
+            --tag "ghcr.io/${{ env.OWNER }}/bank-${{ matrix.name }}:${VERSION}" \
+            "ghcr.io/${{ env.OWNER }}/bank-${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign image by digest
+        run: cosign sign --yes "ghcr.io/${{ env.OWNER }}/bank-${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+
+      - id: collect
+        run: echo "${{ matrix.name }}=${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+```
+
+Что это даёт:
+- Под мутабельным семантическим тегом **никогда** не может оказаться образ, не прошедший Trivy — его физически не существует до строки `imagetools create`.
+- `cosign sign` подписывает **digest**, а не тег — значит подпись валидна для обоих тегов (`sha-...` и `X.Y.Z`) одновременно, подмена тега её не обходит.
+- Появился `outputs.<service>` с digest'ом — это нужно для пункта «деплой по digest» (ниже, A8) и для `promote.yml`.
+
+`job chart` оставляем как есть, он не меняется.
+
+### A8. Задел на деплой по digest (а не по тегу)
+
+Чтобы в `values.yaml` чарта можно было держать не только `tag`, но и `digest`, добавьте в `helm/bank-platform/values.yaml` (аккуратно, **ПРОВЕРЬТЕ** реальные ключи — ниже показан совместимый с текущей схемой вариант, не ломающий `tag`):
+
+```yaml
+services:
+  account-service:
+    image:
+      repository: ghcr.io/OWNER/bank-account-service
+      tag: "1.0.0"
+      digest: ""   # если задан, шаблон deployment должен предпочитать его тегу
+```
+
+В `templates/_helpers.tpl` добавьте хелпер (имя подгоните под конвенции файла):
+
+```yaml
+{{- define "bank-platform.image" -}}
+{{- if .digest -}}
+{{ .repository }}@{{ .digest }}
+{{- else -}}
+{{ .repository }}:{{ .tag }}
+{{- end -}}
+{{- end -}}
+```
+
+И в `deployment.yaml`, там где сейчас подставляется `image: {{ .image.repository }}:{{ .image.tag }}`, замените на `image: {{ include "bank-platform.image" .image }}`. Это отдельная, не блокирующая задача — можно сделать после первого релиза, но структуру стоит заложить сразу, чтобы `promote.yml` (следующий пункт) сразу писал digest, а не тег.
+
+---
+
+## Блок B. Быстрые правки (5 минут каждая, можно сразу)
+
+### B1. `.gitattributes` — полная версия
+
+Замените содержимое `.gitattributes` на:
+
+```
+* text=auto
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.jar binary
+*.png binary
+*.jpg binary
+```
+
+### B2. `.env` — права доступа
+
+В `deploy/ci/gen-env.sh`, в конце, после записи файла, добавьте:
+
+```bash
+chmod 600 .env
+```
+
+### B3. `dependency-review` без пустого дерева зависимостей
+
+В `ci.yml`, в job `backend`, после `./gradlew check` добавьте шаг (нужен для того, чтобы `dependency-review-action` видел реальный граф Gradle-зависимостей, а не пустоту):
+
+```yaml
+      - name: Submit dependency graph
+        uses: gradle/actions/dependency-submission@v4
+```
+
+### B4. `concurrency` для release.yml и promote.yml
+
+В оба файла, сразу после `on:`, добавьте (иначе два тега подряд или два ручных промоушена начнут гонку за один и тот же PR/бранч):
+
+```yaml
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+```
+
+Для `promote.yml` группу стоит завязать на окружение, а не на ref, чтобы staging и prod не блокировали друг друга:
+
+```yaml
+concurrency:
+  group: promote-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+```
+
+---
+
+На этом я закончу это сообщение — дальше идут более объёмные изменения: фикс `valueFiles` в Argo CD, перецепление `promote.yml` на завершение `release.yml` (через `workflow_call`, а не `release: published`), миграции отдельным Job-хуком с `spring.liquibase.enabled=false`, NetworkPolicy/PSA/seccomp для чарта, ESO-манифесты для секретов, и security-заголовки nginx. Напишите «дальше».
+
+
+
+
+Продолжаю — блоки C–H, закрывающие оставшуюся часть «До первого prod-деплоя» и «До заявления production».
+
+---
+
+## Блок C. Argo CD: рабочий `valueFiles` + привязка prod к ревизии
+
+### C1. Env-values внутри чарта вместо `../../deploy/...`
+
+Самый надёжный вариант — перенести файлы окружений внутрь чарта, чтобы Argo CD не упирался в path traversal за пределы `path:`.
+
+**Удалите** `deploy/environments/staging/values.yaml` и `deploy/environments/prod/values.yaml` из прежнего места, **создайте**:
+
+```
+helm/bank-platform/values-staging.yaml
+helm/bank-platform/values-prod.yaml
+```
+
+Содержимое то же, что было в `deploy/environments/*/values.yaml` (этап 8.2), просто другой путь. Это ничего не ломает в логике чарта — Helm грузит сколько угодно `-f` файлов.
+
+### C2. `promote.yml` правится под новый путь
+
+В шаге «Bump image tags» (этап 5.9) замените путь:
+
+```bash
+# было:
+f="deploy/environments/${ENVIRONMENT}/values.yaml"
+# стало:
+f="helm/bank-platform/values-${ENVIRONMENT}.yaml"
+```
+
+### C3. `app-staging.yaml` / `app-prod.yaml` — без `../..`
+
+```yaml
+# deploy/argocd/app-staging.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bank-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: bank
+  source:
+    repoURL: https://github.com/OWNER/spring-cloud-banking-system.git
+    targetRevision: main
+    path: helm/bank-platform
+    helm:
+      releaseName: bank
+      valueFiles:
+        - values-managed.yaml
+        - values-staging.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: bank-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }
+```
+
+### C4. Prod: pinned revision, а не плавающий `main`
+
+Ручной Sync на `targetRevision: main` опасен — можно случайно выкатить не тот коммит. Prod должен следить за **тегом**, который проставляет сам `promote.yml` после смены `values-prod.yaml`.
+
+```yaml
+# deploy/argocd/app-prod.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bank-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: bank
+  source:
+    repoURL: https://github.com/OWNER/spring-cloud-banking-system.git
+    targetRevision: promote/prod   # ветка, а не main — см. ниже
+    path: helm/bank-platform
+    helm:
+      releaseName: bank
+      valueFiles:
+        - values-managed.yaml
+        - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: bank-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }
+  # automated отсутствует — Sync только руками
+```
+
+Для этого `promote.yml` для prod не должен удалять ветку `promote/prod` после merge — измените `peter-evans/create-pull-request` для prod-кейса: `delete-branch: false`, и **не сквош-мёржить** PR в `main`, а мёржить обычным merge commit в саму ветку `promote/prod`, либо проще — держать `promote/prod` как долгоживущую ветку, в которую мёржится `main` + изменённый `values-prod.yaml`. Это усложнение, но так ручной Sync в Argo CD никогда не подхватит незапланированный коммит из `main`.
+
+Более простой и равноценный вариант, если не хотите возиться с долгоживущей веткой: оставить `targetRevision: main`, но добавить в `app-prod.yaml` аннотацию с ожидаемым тегом и сверять её вручную перед Sync — компромисс хуже, но проще. **Рекомендую первый вариант** (отдельная ветка) для банковского домена.
+
+### C5. Argo CD HA вместо `stable/manifests/install.yaml`
+
+Замените команду установки из этапа 8.1:
+
+```bash
+# было:
+kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# стало (HA, с Redis Sentinel):
+kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/ha/install.yaml
+```
+
+Это всё ещё не полноценный production-чарт (для него правильнее `argo-cd` Helm-чарт с собственными values), но для рамок этой инструкции — минимальный шаг вперёд.
+
+---
+
+## Блок D. Переcцепление `promote.yml` на реальное завершение `release.yml`
+
+### D1. Делаем `release.yml` вызываемым и добавляем финальный job
+
+В конец `release.yml` добавьте job, который гарантированно знает, что всё успешно собралось:
+
+```yaml
+  release-complete:
+    name: All images and chart published
+    needs: [images, chart]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Release ${{ github.ref_name }} complete"
+```
+
+### D2. `promote.yml` триггерится по завершению `release.yml`, не по `release: published`
+
+```yaml
+name: promote
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without v prefix, for example 1.2.3
+        required: true
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, prod]
+        default: staging
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: read
+
+jobs:
+  bump:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'refs/tags/v') == false &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment: ${{ (inputs.environment || 'staging') == 'prod' && 'production' || 'staging' }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment || 'staging' }}
+```
+
+Здесь ключевая проблема: `workflow_run.head_branch` для тег-триггера содержит **имя тега**, а не `refs/tags/...` — GitHub отдаёт его без префикса. Поэтому условие выше нужно упростить и опираться на сам тег:
+
+```yaml
+jobs:
+  bump:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: ${{ (inputs.environment || 'staging') == 'prod' && 'production' || 'staging' }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment || 'staging' }}
+      RAW_VERSION: ${{ inputs.version || github.event.workflow_run.head_branch }}
+```
+
+`head_branch` при срабатывании `workflow_run` на push тега **равен имени тега** (например `v1.2.3`), это задокументированное поведение GitHub. Дальше код `promote.yml` не меняется — `RAW_VERSION` по-прежнему содержит `v1.2.3`, и `${RAW_VERSION#v}` отработает как раньше.
+
+Это устраняет сразу обе проблемы из вашего пункта 2: промоушен больше не стартует параллельно со сборкой (он ждёт `completed`), и красный `release.yml` не запускает дальнейшую цепочку, потому что `conclusion == 'success'` отфильтровывает падения.
+
+### D3. Digest вместо тега в `promote.yml`
+
+Раз в блоке A7 `release.yml` теперь даёт надёжный semver-тег только после успешного скана, `promote.yml` может продолжать ставить `tag`, это безопасно. Но для максимальной защищённости (и чтобы использовать задел из A8) замените шаг ожидания образов на получение digest и запись его в `values-<env>.yaml`:
+
+```yaml
+      - name: Resolve digests and bump
+        run: |
+          OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          VERSION="${RAW_VERSION#v}"
+          f="helm/bank-platform/values-${ENVIRONMENT}.yaml"
+          for s in account-service bill-service deposit-service notification-service gateway-service frontend; do
+            for i in $(seq 1 60); do
+              digest="$(docker buildx imagetools inspect "ghcr.io/${OWNER}/bank-${s}:${VERSION}" --format '{{json .Manifest.Digest}}' 2>/dev/null | tr -d '"' || true)"
+              [ -n "$digest" ] && break
+              [ "$i" = 60 ] && { echo "missing ${s}:${VERSION}"; exit 1; }
+              sleep 30
+            done
+            yq -i ".services[\"$s\"].image.tag = \"$VERSION\"" "$f"
+            yq -i ".services[\"$s\"].image.digest = \"$digest\"" "$f"
+          done
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+```
+
+Это требует, чтобы хелпер из A8 (`bank-platform.image`) уже был в чарте — иначе поле `digest` просто будет лежать неиспользуемым, без вреда, но и без пользы.
+
+---
+
+## Блок E. Миграции Liquibase отдельным Job-хуком
+
+### E1. Отключаем автозапуск миграций в рантайме
+
+В `application.yml` (или `application-kubernetes.yml`, смотрите, как у вас разложена конфигурация — **ПРОВЕРЬТЕ**, какой профиль реально активен в поде) каждого сервиса с БД добавьте:
+
+```yaml
+spring:
+  liquibase:
+    enabled: false
+```
+
+Без этого при `replicas: 3` все три пода одновременно попытаются взять Liquibase changelog lock — в лучшем случае будет гонка с задержками (`liquibase lock already held`), в худшем — битая блокировка при убитом поде посреди миграции.
+
+### E2. Helm-хук `pre-upgrade, pre-install`
+
+Создайте `helm/bank-platform/templates/migration-job.yaml`. Шаблон делает по одному Job на каждый `-service`, у которого объявлена БД (ориентируюсь на структуру `services.<name>.image` из values — **ПРОВЕРЬТЕ** реальные имена ключей env/secret в вашем `deployment.yaml` и скопируйте их сюда один в один, ниже только каркас):
+
+```yaml
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled $svc.database }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s-migrate" (include "bank-platform.fullname" $) $name }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-upgrade,pre-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: migrate
+          image: {{ include "bank-platform.image" $svc.image }}
+          args: ["--spring.liquibase.enabled=true", "--spring.main.web-application-type=none"]
+          # ПРОВЕРЬТЕ: если у сервиса нет отдельного режима "только миграция",
+          # замените args на профиль, который поднимает контекст и сразу завершает
+          # процесс после ChangelogExecutor, либо используйте отдельный
+          # liquibase/liquibase-образ с changelog, смонтированным из ConfigMap.
+          envFrom:
+            {{- toYaml $svc.envFrom | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+{{- end }}
+{{- end }}
+```
+
+**Это самое слабое место патча**, и я явно это помечаю: запуск Spring Boot приложения с `web-application-type=none` только ради миграции — рабочий, но тяжёлый паттерн (поднимается весь контекст). Более чистый вариант — вынести Liquibase changelog в отдельный slim-образ (`liquibase/liquibase` + changelog как ConfigMap/volume) и гонять `liquibase update` без Spring вообще. Это требует знания, как у вас разложены changelog-файлы (classpath vs внешний каталог), чего я не видел. **ПРОВЕРЬТЕ структуру `src/main/resources/db/changelog` в каждом сервисе** перед тем, как решать, какой вариант брать — если changelog простой (один файл на сервис), выгоднее отдельный liquibase-образ.
+
+### E3. `values.yaml` — пометить, у каких сервисов есть БД
+
+```yaml
+services:
+  account-service:
+    enabled: true
+    database: true
+  bill-service:
+    enabled: true
+    database: true
+  deposit-service:
+    enabled: true
+    database: true
+  notification-service:
+    enabled: true
+    database: true
+  gateway-service:
+    enabled: true
+    database: false
+  frontend:
+    enabled: true
+    database: false
+```
+
+**ПРОВЕРЬТЕ**, не конфликтует ли ключ `database` с уже существующим полем в вашем `values.yaml` — возможно, у вас это уже выражено иначе (например, наличием блока `services.<name>.db`).
+
+---
+
+## Блок F. Pod Security, NetworkPolicy, seccomp — быстрые win'ы
+
+### F1. Pod Security Admission на namespace
+
+В `bootstrap.sh`, сразу после создания namespace, и в описании staging/prod-namespace (создаются Argo CD через `CreateNamespace=true`, поэтому лейблы нужно проставлять отдельно — Argo CD их не ставит сам):
+
+```bash
+kubectl label namespace "$NAMESPACE" \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/enforce-version=latest \
+  --overwrite
+```
+
+Для staging/prod добавьте это в `deploy/argocd/app-staging.yaml` / `app-prod.yaml` как отдельный manifest, применяемый до синхронизации приложения, либо проще — заведите `templates/namespace-labels` нельзя (namespace не в ведении чарта), так что сделайте маленький `deploy/k8s/namespaces.yaml`:
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bank-staging
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bank-prod
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+```
+
+Примените один раз вручную (`kubectl apply -f deploy/k8s/namespaces.yaml`) до первого `Sync` в Argo CD — `restricted` сразу отклонит поды без правильного `securityContext`, так что сначала проверьте, что у **всех** сервисов (не только frontend) выставлены `runAsNonRoot`, `seccompProfile`, `capabilities.drop: [ALL]` — см. F2.
+
+### F2. Базовый securityContext для всех сервисов
+
+В `values.yaml`, верхнеуровнево:
+
+```yaml
+global:
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile: { type: RuntimeDefault }
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: { drop: ["ALL"] }
+```
+
+В `templates/deployment.yaml`:
+
+```yaml
+spec:
+  template:
+    spec:
+      securityContext:
+        {{- toYaml .Values.global.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $name }}
+          securityContext:
+            {{- toYaml .Values.global.containerSecurityContext | nindent 12 }}
+```
+
+**ПРОВЕРЬТЕ**: `readOnlyRootFilesystem: true` может сломать Java-сервисы, если они пишут временные файлы (логи, кэш) в `/tmp` без отдельного volume. Добавьте `emptyDir` на `/tmp`:
+
+```yaml
+volumes:
+  - name: tmp
+    emptyDir: {}
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+```
+
+Это нужно добавить в общий (не только frontend) блок volumes/volumeMounts в `deployment.yaml`.
+
+### F3. NetworkPolicy default-deny + явные разрешения
+
+`helm/bank-platform/templates/networkpolicy-default-deny.yaml`:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bank-platform.fullname" . }}-default-deny
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  egress:
+    # DNS всегда нужен
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+```
+
+`templates/networkpolicy-allow-internal.yaml` — разрешаем сервисам ходить друг к другу и к инфраструктуре внутри namespace (упрощённо, по меткам namespace, а не по точечным selector'ам — **ПРОВЕРЬТЕ**, достаточно ли этого, точечные policy per-service надёжнее, но требуют знания реальных labels Postgres/RabbitMQ/Keycloak, которые я не видел):
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bank-platform.fullname" . }}-allow-intra-namespace
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+```
+
+`templates/networkpolicy-allow-ingress.yaml` — трафик от ingress-nginx к frontend/gateway:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bank-platform.fullname" . }}-allow-from-ingress
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [frontend, gateway-service] }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+```
+
+Это компромиссный, не идеально детализированный набор (идеал — отдельная policy на каждую пару сервис→БД), но закрывает главную дыру из вашего замечания: «любой под в namespace может ходить в Postgres» — после default-deny это уже не так для подов за пределами namespace, а внутри он всё ещё разрешён широко. Точечная сегментация — отдельная задача, требующая знания реальных меток StatefulSet'ов Postgres/RabbitMQ.
+
+### F4. `automountServiceAccountToken: false`
+
+В `deployment.yaml`, в `spec.template.spec`:
+
+```yaml
+automountServiceAccountToken: false
+```
+
+Добавляйте везде, кроме случаев, если какой-то сервис реально обращается к Kubernetes API (маловероятно для банковских сервисов, но **ПРОВЕРЬТЕ** — если Spring Cloud Kubernetes discovery используется, токен нужен).
+
+---
+
+## Блок G. nginx — security headers и health endpoint
+
+Замените `frontend/nginx.conf` (из этапа 2.6) на расширенную версию:
+
+```nginx
+server {
+    listen 8080;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    server_tokens off;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    # ПРОВЕРЬТЕ: connect-src должен включать реальный GATEWAY_URL/KEYCLOAK_URL
+    # окружения, иначе CSP заблокирует запросы приложения. Если фронтенд
+    # грузит что-то с CDN, добавьте это сюда же.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: wss:; frame-ancestors 'none'" always;
+
+    gzip on;
+    gzip_vary on;
+    gzip_types text/plain text/css application/json application/javascript text/javascript image/svg+xml;
+    gzip_min_length 1024;
+
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+        add_header Content-Type text/plain;
+    }
+
+    location = /config.js {
+        add_header Cache-Control no-store;
+        try_files $uri =404;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    location / {
+        add_header Cache-Control no-cache;
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+**ПРОВЕРЬТЕ** `Content-Security-Policy`: если Keycloak-redirect открывается в том же окне (не iframe), `frame-ancestors 'none'` нормален; если у вас где-то используется silent SSO check через iframe, понадобится `frame-ancestors 'self'` вместо `'none'` и отдельный `frame-src`. Также `style-src 'unsafe-inline'` — компромисс ради CSS-in-JS/Vite, в идеале заменить на nonce, но это требует правок в сборке.
+
+Добавьте пробы в `deployment.yaml` для frontend (если их ещё нет):
+
+```yaml
+{{- if eq $name "frontend" }}
+livenessProbe:
+  httpGet: { path: /healthz, port: 8080 }
+  initialDelaySeconds: 5
+  periodSeconds: 10
+readinessProbe:
+  httpGet: { path: /healthz, port: 8080 }
+  initialDelaySeconds: 3
+  periodSeconds: 5
+{{- end }}
+```
+
+---
+
+## Блок H. ESO вместо «сделайте сами»
+
+Минимальный рабочий каркас вместо фразы «используйте External Secrets Operator».
+
+### H1. Установка ESO (документировать в `deploy/argocd` как отдельное приложение, не частью `bank`)
+
+```bash
+helm repo add external-secrets https://charts.external-secrets.io
+helm upgrade --install external-secrets external-secrets/external-secrets \
+  -n external-secrets-system --create-namespace
+```
+
+### H2. `SecretStore` под staging/prod (пример для AWS Secrets Manager — **ПРОВЕРЬТЕ**, какой провайдер у вас реально доступен: GCP Secret Manager, Vault, Azure Key Vault — структура `SecretStore.spec.provider` будет другой)
+
+```yaml
+# deploy/k8s/infra/secrets/secretstore-staging.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: aws-secrets-manager
+  namespace: bank-staging
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: eu-central-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets-sa   # IRSA / Workload Identity — настраивается у облачного провайдера
+```
+
+### H3. `ExternalSecret` вместо ручного `kubectl create secret`
+
+```yaml
+# deploy/k8s/infra/secrets/external-secret-app.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: bank-app-secrets
+  namespace: bank-staging
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: SecretStore
+  target:
+    name: bank-app-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: ACCOUNT_DB_PASSWORD
+      remoteRef: { key: bank/staging/account-db-password }
+    - secretKey: BILL_DB_PASSWORD
+      remoteRef: { key: bank/staging/bill-db-password }
+    - secretKey: DEPOSIT_DB_PASSWORD
+      remoteRef: { key: bank/staging/deposit-db-password }
+    - secretKey: NOTIFICATION_DB_PASSWORD
+      remoteRef: { key: bank/staging/notification-db-password }
+    - secretKey: RABBITMQ_USERNAME
+      remoteRef: { key: bank/staging/rabbitmq-username }
+    - secretKey: RABBITMQ_PASSWORD
+      remoteRef: { key: bank/staging/rabbitmq-password }
+    - secretKey: MAIL_USERNAME
+      remoteRef: { key: bank/staging/mail-username }
+    - secretKey: MAIL_PASSWORD
+      remoteRef: { key: bank/staging/mail-password }
+```
+
+Аналогично для `bank-prod` (другой `namespace`, другие пути `bank/prod/...`) и для `*-db-credentials` (`kubernetes.io/basic-auth` secrets с `cnpg.io/reload=true` — добавьте `target.template.metadata.labels`, чтобы лейбл проставился после синка ESO):
+
+```yaml
+  target:
+    name: account-db-credentials
+    creationPolicy: Owner
+    template:
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      type: kubernetes.io/basic-auth
+```
+
+Это закрывает главный риск из вашего пункта 13 — пароли больше не проходят ни через `.env`, ни через историю терминала для staging/prod; секреты хранятся в облачном secret-manager и попадают в кластер только через ESO с ограниченным IAM-доступом сервис-аккаунта.
+
+---
+
+Это покрывает все пункты 1–10 из вашего «До первого тега», плюс 7, 10, 12, 13 из «До заявления production» (частично — точечная сегментация NetworkPolicy и переход на digest-деплой помечены как доведённые до рабочего каркаса, но не до идеала).
+
+В следующем сообщении, если нужно, могу закрыть оставшееся: **repository rulesets вместо branch protection API, подпись коммитов, HPA/PDB/topologySpreadConstraints, ApplicationSet вместо ручных Application-манифестов, базовый Prometheus/Grafana stack и ночной restore-drill job**. Напишите «дальше», если продолжать.
+
+
+
+
+
+Блоки I–N
