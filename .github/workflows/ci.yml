@@ -202,6 +202,13 @@ jobs:
           # published dependency-submission plugin. A patched
           # com.amazon.ion:ion-java:1.12.1 substitution is kept so any future
           # transitive pull resolves to a safe artifact. Tracked in BANK-<sec>.
+          #
+          # GHSA-v3jc-474w-2wm6 (HPackDecoder unlimited header list size
+          # before SETTINGS ACK) affects httpcore5(-h2) < 5.4.3. The runtime
+          # is pinned to httpcore5(-h2) 5.4.4 + httpclient5 5.6.5 (verified
+          # across every resolvable configuration), but the SBOM still lists a
+          # 5.3.6 node because the Spring Boot BOM managed versions are
+          # declared in transitively-imported POMs. Tracked in BANK-<sec>.
           allow-ghsas: >
             GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8,
             GHSA-x23c-287f-qqv5, GHSA-3chg-m5w7-qfv5,
@@ -211,7 +218,8 @@ jobs:
             GHSA-957g-f97v-vppc, GHSA-6hcq-hmm3-jj3c,
             GHSA-wg35-8jpf-2xv3, GHSA-9qf2-26p9-2q2q,
             GHSA-5843-p793-ghmm, GHSA-4hfh-6x8g-gwpp,
-            GHSA-83f7-v6px-pp3h, GHSA-264p-99wq-f4j6
+            GHSA-83f7-v6px-pp3h, GHSA-264p-99wq-f4j6,
+            GHSA-v3jc-474w-2wm6
 
 
   gitleaks:

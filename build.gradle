@@ -79,6 +79,16 @@ subprojects {
             // fixed in 42.7.11, GHSA-j92g-9f8w-j867 (silent channel-binding
             // downgrade) fixed in 42.7.12. Pin the latest 42.7.x line.
             dependency 'org.postgresql:postgresql:42.7.14'
+            // GHSA-v3jc-474w-2wm6 (HPackDecoder unlimited header list size
+            // before SETTINGS ACK) affects httpcore5(-h2) < 5.4.3; the
+            // transitive 5.3.6 comes from httpclient5 via Spring Cloud
+            // config/eureka clients. Pin the 5.4.x line.
+            dependency 'org.apache.httpcomponents.core5:httpcore5:5.4.4'
+            dependency 'org.apache.httpcomponents.core5:httpcore5-h2:5.4.4'
+            // httpclient5 5.5.2 pins the vulnerable httpcore5 5.3.6 in its
+            // POM; 5.6.5 is the first line whose POM declares httpcore5
+            // 5.4.4, keeping the SBOM free of the 5.3.6 node.
+            dependency 'org.apache.httpcomponents.client5:httpclient5:5.6.5'
         }
     }
 
