@@ -173,6 +173,18 @@ subprojects {
         }
     }
 
+    // GHSA-264p-99wq-f4j6 (Ion Java StackOverflow, CVE-2024-21634) affects
+    // software.amazon.ion:ion-java < 1.10.5. That coordinate line is
+    // abandoned (last release 1.5.1) and has no fixed release; the fix only
+    // exists in com.amazon.ion:ion-java >= 1.10.5, which ships the same
+    // com.amazon.ion.* classes. Substitute any transitive pull of the old
+    // coordinates with the patched artifact.
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute module('software.amazon.ion:ion-java') using module('com.amazon.ion:ion-java:1.12.1')
+        }
+    }
+
     // Coverage gate ONLY for services that are deployed and have tests.
     // config-service and discovery-service do not deploy and have no meaningful
     // test coverage — the gate would fail those modules.
