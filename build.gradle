@@ -31,6 +31,12 @@ allprojects {
 // use the 10.1.59 release that contains the same fixes.
 ext['tomcat.version'] = '10.1.59'
 
+// Spring Boot 3.5.x BOM pins Netty 4.1.135.Final, which is vulnerable to:
+//   GHSA-c4c3-7fpv-j4q5 (SNI routing bypass via fragmented TLS ClientHello),
+//   GHSA-fccg-mwvh-qqg4 (quadratic pre-handshake reassembly in SNI parsing).
+// Both are fixed in 4.1.137.Final.
+ext['netty.version'] = '4.1.137.Final'
+
 def integrationTestPatterns = [
     '**/*IntegrationTest',
     '**/*RepositoryUnitTest',
