@@ -75,6 +75,10 @@ subprojects {
             //   GHSA-c3fc-8qff-9hwx (LDAP injection).
             // All three are fixed in 1.85 (1.84 covers the LDAP one).
             dependency 'org.bouncycastle:bcprov-jdk18on:1.85'
+            // pgjdbc advisories: GHSA-98qh-xjc8-98pq (SCRAM PBKDF2 DoS)
+            // fixed in 42.7.11, GHSA-j92g-9f8w-j867 (silent channel-binding
+            // downgrade) fixed in 42.7.12. Pin the latest 42.7.x line.
+            dependency 'org.postgresql:postgresql:42.7.14'
         }
     }
 
