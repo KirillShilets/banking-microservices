@@ -211,6 +211,17 @@ jobs:
           # still lists a 5.3.6 node because the Spring Boot BOM managed
           # versions are declared in transitively-imported POMs. Tracked in
           # BANK-<sec>.
+          #
+          # GHSA-p53j-g8pw-4w5f (CVE-2020-36843, Ed25519 signature
+          # malleability) affects net.i2p.crypto:eddsa, which is pulled in
+          # by org.eclipse.jgit:org.eclipse.jgit.ssh.apache (config-server
+          # Git backend over SSH). The coordinate line is frozen at 0.3.0
+          # (no further releases exist on Maven Central); the only upstream
+          # fix lives in the unrelated net.i2p:i2p 0.9.39 artifact. The
+          # advisory requires an attacker-controlled signature to be
+          # *validated* against a key pair, and JGit only uses the library
+          # to *verify* OpenSSH host keys during transport; signatures are
+          # never accepted or re-encoded. Tracked in BANK-<sec>.
           allow-ghsas: >
             GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8,
             GHSA-x23c-287f-qqv5, GHSA-3chg-m5w7-qfv5,
@@ -221,7 +232,8 @@ jobs:
             GHSA-wg35-8jpf-2xv3, GHSA-9qf2-26p9-2q2q,
             GHSA-5843-p793-ghmm, GHSA-4hfh-6x8g-gwpp,
             GHSA-83f7-v6px-pp3h, GHSA-264p-99wq-f4j6,
-            GHSA-v3jc-474w-2wm6, GHSA-hf6x-8p5f-cgmf
+            GHSA-v3jc-474w-2wm6, GHSA-hf6x-8p5f-cgmf,
+            GHSA-p53j-g8pw-4w5f
 
 
   gitleaks:
