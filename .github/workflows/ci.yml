@@ -241,6 +241,13 @@ jobs:
           # GHSA-gx83-3vf8-gh7j, GHSA-5gvw-p9qm-jgwh (moderate). All are
           # fixed in 2.21.8, which is the only version present in any
           # resolved configuration.
+          #
+          # GHSA-7g45-4rm6-3mm3, GHSA-mvr2-9pj6-7w5j and
+          # GHSA-5mg8-w23w-74h3 affect com.google.guava:guava:16.0, an
+          # ancient transitive declaration in Eureka's POM metadata. The
+          # runtime resolves only guava 33.0.0-jre (verified across every
+          # resolvable configuration); the 16.0 node exists only as SBOM
+          # metadata and is never loaded. Tracked in BANK-<sec>.
           allow-ghsas: >
             GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8,
             GHSA-x23c-287f-qqv5, GHSA-3chg-m5w7-qfv5,
@@ -258,7 +265,9 @@ jobs:
             GHSA-cxp5-3px4-pw24, GHSA-5jmj-h7xm-6q6v,
             GHSA-mhm7-754m-9p8w, GHSA-vvgp-rfg2-7rr6,
             GHSA-wjgm-6hv5-3cvf, GHSA-gx83-3vf8-gh7j,
-            GHSA-5gvw-p9qm-jgwh
+            GHSA-5gvw-p9qm-jgwh,
+            GHSA-7g45-4rm6-3mm3, GHSA-mvr2-9pj6-7w5j,
+            GHSA-5mg8-w23w-74h3
 
 
   gitleaks:
