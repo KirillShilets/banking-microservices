@@ -1,0 +1,14 @@
+# Trivy ignore list for the runtime SBOM gate.
+#
+# Spring Framework 6.2.19 (Spring Boot 3.5.x) has no OSS backport for the
+# August/September 2026 MVC/WebFlux advisories; the only OSS fix is Spring
+# Framework 7.0.9 (Spring Boot 4). None of the affected features are used by
+# this codebase: no XsltView/JSP views, no Server-Sent Events, no
+# versioned/static resource serving, no UrlHandlerFilter or
+# UrlFileNameViewController, no JavaScriptUtils or JSP form tags, no
+# functional (RouterFunction) endpoints, no multipart/file-upload handling
+# and no server-side sessions (JWT bearer auth only).
+# Tracked in BANK-<sec> until the Spring Boot 4 migration.
+CVE-2026-47884
+CVE-2026-47890
+CVE-2026-47892

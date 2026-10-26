@@ -340,14 +340,16 @@ services:
 chmod 600 .env
 ```
 
-### B3. `dependency-review` без пустого дерева зависимостей
+### B3. Runtime SBOM вместо `dependency-review`
 
-В `ci.yml`, в job `backend`, после `./gradlew check` добавьте шаг (нужен для того, чтобы `dependency-review-action` видел реальный граф Gradle-зависимостей, а не пустоту):
-
-```yaml
-      - name: Submit dependency graph
-        uses: gradle/actions/dependency-submission@v4
-```
+GitHub dependency graph для Gradle содержит buildscript/plugin-зависимости и
+BOM-метаданные (`dependencyManagement`), поэтому `dependency-review-action`
+даёт ложные срабатывания на версиях, которые никогда не попадают в артефакты.
+Вместо него job `backend-vulnerability-scan` генерирует CycloneDX SBOM по
+`runtimeClasspath` (`./gradlew cyclonedxBom`) и сканирует его Trivy
+(`scan-type: sbom`). Принятые неустранимые findings документируются в
+`.trivyignore`. Шаг `gradle/actions/dependency-submission` остаётся только для
+Dependabot и не блокирует CI.
 
 ### B4. `concurrency` для release.yml и promote.yml
 

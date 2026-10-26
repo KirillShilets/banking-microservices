@@ -22,6 +22,8 @@ plugins {
     id 'com.github.spotbugs' version '6.0.26' apply false
     id 'com.diffplug.spotless' version '6.25.0' apply false
     id 'org.sonarqube' version '7.5.0.8588' apply false
+    // Runtime SBOM for the CI vulnerability gate (cyclonedxBom).
+    id 'org.cyclonedx.bom' version '3.5.1'
 }
 
 apply plugin: 'org.sonarqube'
@@ -66,6 +68,15 @@ subprojects {
     apply plugin: 'jacoco'
     apply plugin: 'com.github.spotbugs'
     apply plugin: 'com.diffplug.spotless'
+
+    // The CI vulnerability gate scans exactly what ships: the resolved
+    // runtimeClasspath. Buildscript plugins and dependency-management
+    // metadata (BOM constraints) are not part of the runtime graph, so they
+    // cannot raise false positives in the SBOM.
+    tasks.matching { it.name == 'cyclonedxDirectBom' }.configureEach {
+        includeConfigs = ['runtimeClasspath']
+        skipConfigs = []
+    }
 
     java {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -270,6 +281,15 @@ subprojects {
             }
         }
         check.dependsOn tasks.named('jacocoTestCoverageVerification')
+    }
+}
+
+// common-test-lib declares test tooling (Testcontainers, AssertJ, Mockito) as
+// api dependencies. It is not part of any shipped artifact, so its Direct SBOM
+// must not contribute test-only components to the runtime SBOM.
+project(':common-test-lib') {
+    tasks.matching { it.name == 'cyclonedxDirectBom' }.configureEach {
+        enabled = false
     }
 }
 

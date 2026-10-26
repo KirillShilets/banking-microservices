@@ -211,7 +211,7 @@ npm run build
  - **Backend**: `./gradlew clean check` (unit + integration с Testcontainers, SpotBugs c `ignoreFailures=false`, Spotless, JaCoCo gate 60% строк на деплоящихся сервисах);
  - **Frontend**: `npm ci`, eslint, vitest с coverage-порогами, `npm audit --omit=dev --audit-level=high`, build;
  - **SonarQube**: analysis для backend и frontend, ожидание Quality Gate (`sonar.qualitygate.wait=true`), fail-closed при отсутствии `SONAR_HOST_URL`/`SONAR_TOKEN`;
- - **Security**: Gitleaks (вся история), CodeQL (Java + TS), dependency-review, Trivy (filesystem HIGH/CRITICAL), Checkov (rendered-манифесты Kubernetes);
+ - **Security**: Gitleaks (вся история), CodeQL (Java + TS), runtime SBOM (CycloneDX) + Trivy SBOM (MEDIUM/HIGH/CRITICAL с фиксами), Trivy filesystem HIGH/CRITICAL, Checkov (rendered-манифесты Kubernetes);
  - **Static/структура**: hadolint, ShellCheck, actionlint (с проверкой checksum), yamllint, `deploy/ci/repository-preflight.sh`;
  - **Helm/K8s**: `helm lint` всех values, render комбинаций Argo (kind/staging/prod), kubeconform `-strict`, запрет placeholder-значений в staging/prod output.
 
