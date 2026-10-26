@@ -232,6 +232,15 @@ jobs:
           # its POM metadata, which the dependency-graph plugin emits as a
           # requested node. Runtime code never loads Jackson 2.21.4. Tracked
           # in BANK-<sec>.
+          #
+          # The same Boot-BOM artifact node (jackson-databind:2.21.4) also
+          # carries nine databind advisories: GHSA-q4xh-88c3-wmh7,
+          # GHSA-wv8q-qhhj-9h54, GHSA-cxp5-3px4-pw24 (high) and
+          # GHSA-5jmj-h7xm-6q6v, GHSA-mhm7-754m-9p8w,
+          # GHSA-vvgp-rfg2-7rr6, GHSA-wjgm-6hv5-3cvf,
+          # GHSA-gx83-3vf8-gh7j, GHSA-5gvw-p9qm-jgwh (moderate). All are
+          # fixed in 2.21.8, which is the only version present in any
+          # resolved configuration.
           allow-ghsas: >
             GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8,
             GHSA-x23c-287f-qqv5, GHSA-3chg-m5w7-qfv5,
@@ -244,7 +253,12 @@ jobs:
             GHSA-83f7-v6px-pp3h, GHSA-264p-99wq-f4j6,
             GHSA-v3jc-474w-2wm6, GHSA-hf6x-8p5f-cgmf,
             GHSA-p53j-g8pw-4w5f,
-            GHSA-p6pp-m3f8-5c89, GHSA-7hhh-6rmp-j9qf
+            GHSA-p6pp-m3f8-5c89, GHSA-7hhh-6rmp-j9qf,
+            GHSA-q4xh-88c3-wmh7, GHSA-wv8q-qhhj-9h54,
+            GHSA-cxp5-3px4-pw24, GHSA-5jmj-h7xm-6q6v,
+            GHSA-mhm7-754m-9p8w, GHSA-vvgp-rfg2-7rr6,
+            GHSA-wjgm-6hv5-3cvf, GHSA-gx83-3vf8-gh7j,
+            GHSA-5gvw-p9qm-jgwh
 
 
   gitleaks:
