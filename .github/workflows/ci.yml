@@ -222,6 +222,16 @@ jobs:
           # *validated* against a key pair, and JGit only uses the library
           # to *verify* OpenSSH host keys during transport; signatures are
           # never accepted or re-encoded. Tracked in BANK-<sec>.
+          #
+          # GHSA-p6pp-m3f8-5c89 (ReDoS in NumberInput.PATTERN_FLOAT) and
+          # GHSA-7hhh-6rmp-j9qf (unbounded StringBuilder growth in
+          # _reportInvalidToken) affect jackson-core < 2.21.7. The runtime
+          # is pinned to jackson-core/databind 2.21.8 (verified across every
+          # resolvable configuration), but the SBOM still lists a 2.21.4
+          # node because the Spring Boot BOM's managed version is declared in
+          # its POM metadata, which the dependency-graph plugin emits as a
+          # requested node. Runtime code never loads Jackson 2.21.4. Tracked
+          # in BANK-<sec>.
           allow-ghsas: >
             GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8,
             GHSA-x23c-287f-qqv5, GHSA-3chg-m5w7-qfv5,
@@ -233,7 +243,8 @@ jobs:
             GHSA-5843-p793-ghmm, GHSA-4hfh-6x8g-gwpp,
             GHSA-83f7-v6px-pp3h, GHSA-264p-99wq-f4j6,
             GHSA-v3jc-474w-2wm6, GHSA-hf6x-8p5f-cgmf,
-            GHSA-p53j-g8pw-4w5f
+            GHSA-p53j-g8pw-4w5f,
+            GHSA-p6pp-m3f8-5c89, GHSA-7hhh-6rmp-j9qf
 
 
   gitleaks:
