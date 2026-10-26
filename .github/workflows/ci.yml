@@ -212,6 +212,16 @@ jobs:
           # versions are declared in transitively-imported POMs. Tracked in
           # BANK-<sec>.
           #
+          # GHSA-hjcp-jmpx-g3qm (CVE-2026-64607, connection leak on a
+          # Content-Encoding decode error leading to pool exhaustion)
+          # affects httpclient5 < 5.6.3. The Spring Boot 3.5.15 BOM manages
+          # httpclient5 5.5.2, so the SBOM keeps a 5.5.2 constraint node even
+          # after resolution is overridden. Every resolvable classpath uses
+          # 5.6.5: dependencyManagement pins it for project configurations
+          # and build.gradle forces it (together with httpcore5(-h2) 5.4.4)
+          # on the buildscript classpath. The 5.5.2 node is BOM metadata that
+          # is never loaded. Tracked in BANK-<sec>.
+          #
           # GHSA-p53j-g8pw-4w5f (CVE-2020-36843, Ed25519 signature
           # malleability) affects net.i2p.crypto:eddsa, which is pulled in
           # by org.eclipse.jgit:org.eclipse.jgit.ssh.apache (config-server
@@ -292,7 +302,8 @@ jobs:
             GHSA-7g45-4rm6-3mm3, GHSA-mvr2-9pj6-7w5j,
             GHSA-5mg8-w23w-74h3,
             GHSA-j288-q9x7-2f5v,
-            GHSA-4265-ccf5-phj5, GHSA-4g9r-vxhx-9pgx
+            GHSA-4265-ccf5-phj5, GHSA-4g9r-vxhx-9pgx,
+            GHSA-hjcp-jmpx-g3qm
 
 
   gitleaks:

@@ -1,3 +1,18 @@
+buildscript {
+    configurations.classpath {
+        resolutionStrategy {
+            // The Spring Boot Gradle plugin's buildpack-platform declares
+            // httpclient5 5.5.2 / httpcore5 5.3.6, which carry
+            // GHSA-hjcp-jmpx-g3qm and the header-parsing advisories. Force the
+            // fixed line on the buildscript classpath so the submitted
+            // dependency graph contains no vulnerable build-tool nodes.
+            force 'org.apache.httpcomponents.client5:httpclient5:5.6.5'
+            force 'org.apache.httpcomponents.core5:httpcore5:5.4.4'
+            force 'org.apache.httpcomponents.core5:httpcore5-h2:5.4.4'
+        }
+    }
+}
+
 plugins {
     // 3.5.15: pins Spring Security 6.5.11 (fixes GHSA-mf92-479x-3373,
     // GHSA-293q-567p-wmwq, GHSA-x2r2-rvhq-2mqv) and Spring Framework 6.2.19.
