@@ -89,6 +89,15 @@ subprojects {
             // POM; 5.6.5 is the first line whose POM declares httpcore5
             // 5.4.4, keeping the SBOM free of the 5.3.6 node.
             dependency 'org.apache.httpcomponents.client5:httpclient5:5.6.5'
+            // Spring Boot 3.5.x BOM pins rabbitmq amqp-client 5.25.0, which
+            // is vulnerable to ten advisories (GHSA-93j5-89vc-pph4,
+            // GHSA-68mj-5wr7-6fgg, GHSA-6g32-pxv4-2wfj,
+            // GHSA-jh4v-gfqj-7rhx, GHSA-qx7j-jv8m-fppr,
+            // GHSA-5m9f-rphj-c435, GHSA-h6w7-qmcm-q6xr,
+            // GHSA-7822-rcf6-97fx, GHSA-cqgh-8p3p-mx4m,
+            // GHSA-5xwg-cfvj-gff5). The deepest fix in the series is
+            // 5.36.1; pin the latest 5.37.0 release.
+            dependency 'com.rabbitmq:amqp-client:5.37.0'
         }
     }
 
