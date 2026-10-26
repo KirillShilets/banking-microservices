@@ -255,6 +255,22 @@ jobs:
           # org.apache.commons:commons-lang3:3.18.0 (which is fixed for this
           # advisory); the 2.6 node exists only as SBOM metadata and is
           # never loaded. Tracked in BANK-<sec>.
+          #
+          # GHSA-4265-ccf5-phj5 (OutOfMemoryError unpacking a broken Pack200
+          # file) and GHSA-4g9r-vxhx-9pgx (infinite loop on a corrupted DUMP
+          # file) affect commons-compress < 1.26.0. The 1.24.0 node exists
+          # because the Spring Boot 3.5.15 BOM manages the legacy
+          # org.testcontainers:testcontainers:1.21.4 coordinate, whose POM
+          # declares commons-compress 1.24.0, and the legacy postgresql /
+          # junit-jupiter 1.21.4 modules depend on it. Testcontainers 2.0
+          # renamed its modules, so the repository pins the new
+          # org.testcontainers:testcontainers:2.0.2 core and every resolvable
+          # test classpath selects commons-compress 1.28.0 (verified with
+          # ./gradlew :account-service:dependencies --configuration testRuntimeClasspath),
+          # while the buildscript classpath selects 1.27.1. Both are fixed for
+          # these advisories; the 1.24.0 node is BOM metadata that is never
+          # loaded. build.gradle additionally pins commons-compress 1.28.0 as
+          # defence in depth. Tracked in BANK-<sec>.
           allow-ghsas: >
             GHSA-pc63-qcmh-9cmg, GHSA-j9f9-w8pj-32f8,
             GHSA-x23c-287f-qqv5, GHSA-3chg-m5w7-qfv5,
@@ -275,7 +291,8 @@ jobs:
             GHSA-5gvw-p9qm-jgwh,
             GHSA-7g45-4rm6-3mm3, GHSA-mvr2-9pj6-7w5j,
             GHSA-5mg8-w23w-74h3,
-            GHSA-j288-q9x7-2f5v
+            GHSA-j288-q9x7-2f5v,
+            GHSA-4265-ccf5-phj5, GHSA-4g9r-vxhx-9pgx
 
 
   gitleaks:

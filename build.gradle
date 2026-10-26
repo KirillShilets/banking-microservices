@@ -120,6 +120,13 @@ subprojects {
             // commons-lang3 3.17.0 is vulnerable to GHSA-j288-q9x7-2f5v
             // (Uncontrolled Recursion, fixed in 3.18.0).
             dependency 'org.apache.commons:commons-lang3:3.18.0'
+            // The legacy Testcontainers 1.21.4 modules (postgresql,
+            // junit-jupiter) still declare commons-compress 1.24.0, which is
+            // affected by GHSA-4265-ccf5-phj5 and GHSA-4g9r-vxhx-9pgx (both
+            // fixed in 1.26.0). The Testcontainers 2.0.2 core already brings
+            // 1.28.0; pin it explicitly so no legacy module can downgrade the
+            // test classpath.
+            dependency 'org.apache.commons:commons-compress:1.28.0'
         }
     }
 
