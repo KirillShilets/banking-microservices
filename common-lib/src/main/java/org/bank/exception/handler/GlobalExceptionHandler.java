@@ -20,6 +20,8 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
+import org.springframework.http.HttpMethod;
 import java.util.stream.Collectors;
 import java.util.Objects;
 
@@ -113,8 +115,9 @@ public class GlobalExceptionHandler {
 
         HttpHeaders headers = new HttpHeaders();
 
-        if (exception.getSupportedHttpMethods() != null) {
-            headers.setAllow(exception.getSupportedHttpMethods());
+        Set<HttpMethod> supportedMethods = exception.getSupportedHttpMethods();
+        if (supportedMethods != null) {
+            headers.setAllow(supportedMethods);
         }
 
         return new ResponseEntity<>(

@@ -1,8 +1,32 @@
+buildscript {
+    configurations.classpath {
+        resolutionStrategy {
+            // The Spring Boot Gradle plugin's buildpack-platform declares
+            // httpclient5 5.5.2 / httpcore5 5.3.6, which carry
+            // GHSA-hjcp-jmpx-g3qm and the header-parsing advisories. Force the
+            // fixed line on the buildscript classpath so the submitted
+            // dependency graph contains no vulnerable build-tool nodes.
+            force 'org.apache.httpcomponents.client5:httpclient5:5.6.5'
+            force 'org.apache.httpcomponents.core5:httpcore5:5.4.4'
+            force 'org.apache.httpcomponents.core5:httpcore5-h2:5.4.4'
+        }
+    }
+}
+
 plugins {
-    id 'org.springframework.boot' version '3.5.6' apply false
+    // 3.5.15: pins Spring Security 6.5.11 (fixes GHSA-mf92-479x-3373,
+    // GHSA-293q-567p-wmwq, GHSA-x2r2-rvhq-2mqv) and Spring Framework 6.2.19.
+    id 'org.springframework.boot' version '3.5.15' apply false
     id 'io.spring.dependency-management' version '1.1.6' apply false
     id 'io.freefair.lombok' version '8.10' apply false
+    id 'com.github.spotbugs' version '6.0.26' apply false
+    id 'com.diffplug.spotless' version '6.25.0' apply false
+    id 'org.sonarqube' version '7.5.0.8588' apply false
+    // Runtime SBOM for the CI vulnerability gate (cyclonedxBom).
+    id 'org.cyclonedx.bom' version '3.5.1'
 }
+
+apply plugin: 'org.sonarqube'
 
 group = 'org.bank'
 version = '1.0-SNAPSHOT'
@@ -16,9 +40,43 @@ allprojects {
     version = '1.0-SNAPSHOT'
 }
 
+// Spring Boot 3.5.15 BOM pins Tomcat 10.1.55, which is vulnerable to:
+//   GHSA-gcx9-497g-6cp6 (improper access control / incorrect authorization),
+//   GHSA-9xv2-5v5q-p794 (DIGEST auth bypass via capture-replay),
+//   GHSA-h3x4-894j-xpx5 (FORM auth incorrect authorization).
+// All three are fixed in 10.1.58; 10.1.58 is missing from Maven Central, so
+// use the 10.1.59 release that contains the same fixes.
+ext['tomcat.version'] = '10.1.59'
+
+// Spring Boot 3.5.x BOM pins Netty 4.1.135.Final, which is vulnerable to:
+//   GHSA-c4c3-7fpv-j4q5 (SNI routing bypass via fragmented TLS ClientHello),
+//   GHSA-fccg-mwvh-qqg4 (quadratic pre-handshake reassembly in SNI parsing).
+// Both are fixed in 4.1.137.Final.
+ext['netty.version'] = '4.1.137.Final'
+
+def integrationTestPatterns = [
+    '**/*IntegrationTest',
+    '**/*RepositoryUnitTest',
+    '**/ConfigApplicationTests',
+    '**/DiscoveryApplicationTests',
+    '**/GatewayApplicationTests'
+]
+
 subprojects {
     apply plugin: 'java'
     apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'jacoco'
+    apply plugin: 'com.github.spotbugs'
+    apply plugin: 'com.diffplug.spotless'
+
+    // The CI vulnerability gate scans exactly what ships: the resolved
+    // runtimeClasspath. Buildscript plugins and dependency-management
+    // metadata (BOM constraints) are not part of the runtime graph, so they
+    // cannot raise false positives in the SBOM.
+    tasks.matching { it.name == 'cyclonedxDirectBom' }.configureEach {
+        includeConfigs = ['runtimeClasspath']
+        skipConfigs = []
+    }
 
     java {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -30,11 +88,237 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom "org.springframework.cloud:spring-cloud-dependencies:2025.0.0"
+            mavenBom "org.springframework.cloud:spring-cloud-dependencies:2025.0.3"
+        }
+        dependencies {
+            // Spring Boot 3.5.x BOM pins Jackson 2.21.4, which is vulnerable to
+            // eleven advisories (GHSA-5gvw-p9qm-jgwh, GHSA-5jmj-h7xm-6q6v,
+            // GHSA-7hhh-6rmp-j9qf, GHSA-cxp5-3px4-pw24, GHSA-gx83-3vf8-gh7j,
+            // GHSA-mhm7-754m-9p8w, GHSA-p6pp-m3f8-5c89, GHSA-q4xh-88c3-wmh7,
+            // GHSA-vvgp-rfg2-7rr6, GHSA-wjgm-6hv5-3cvf, GHSA-wv8q-qhhj-9h54).
+            // All are fixed in the 2.21.8 line.
+            dependency 'com.fasterxml.jackson.core:jackson-core:2.21.8'
+            dependency 'com.fasterxml.jackson.core:jackson-databind:2.21.8'
+            // Spring Boot 3.5.x BOM pins Log4j 2.24.3, which is vulnerable to
+            // GHSA-qv9r-c865-cp47 (API, fixed in 2.25.5) and GHSA-3pxv-7cmr-fjr4,
+            // GHSA-445c-vh5m-36rj, GHSA-6hg6-v5c8-fphq, GHSA-vc5p-v9hr-52mj
+            // (core, fixed in 2.25.4). 2.25.5 covers all of them.
+            dependency 'org.apache.logging.log4j:log4j-api:2.25.5'
+            dependency 'org.apache.logging.log4j:log4j-core:2.25.5'
+            dependency 'org.apache.logging.log4j:log4j-to-slf4j:2.25.5'
+            // Spring Boot 3.5.x BOM pins FreeMarker 2.3.34, which is vulnerable
+            // to path traversal (GHSA-27j2-h3m2-8237 / CVE-2026-84939).
+            dependency 'org.freemarker:freemarker:2.3.35'
+            // Bouncy Castle 1.80.2, pulled in transitively by
+            // spring-cloud-netflix-eureka-client, is vulnerable to:
+            //   GHSA-9pwp-9qqc-pr26 (name constraints bypass, critical),
+            //   GHSA-qp49-qgx5-5m26 (lazy ASN.1 nesting-depth guard reset),
+            //   GHSA-c3fc-8qff-9hwx (LDAP injection).
+            // All three are fixed in 1.85 (1.84 covers the LDAP one).
+            dependency 'org.bouncycastle:bcprov-jdk18on:1.85'
+            // pgjdbc advisories: GHSA-98qh-xjc8-98pq (SCRAM PBKDF2 DoS)
+            // fixed in 42.7.11, GHSA-j92g-9f8w-j867 (silent channel-binding
+            // downgrade) fixed in 42.7.12. Pin the latest 42.7.x line.
+            dependency 'org.postgresql:postgresql:42.7.14'
+            // GHSA-v3jc-474w-2wm6 (HPackDecoder unlimited header list size
+            // before SETTINGS ACK) affects httpcore5(-h2) < 5.4.3; the
+            // transitive 5.3.6 comes from httpclient5 via Spring Cloud
+            // config/eureka clients. Pin the 5.4.x line.
+            dependency 'org.apache.httpcomponents.core5:httpcore5:5.4.4'
+            dependency 'org.apache.httpcomponents.core5:httpcore5-h2:5.4.4'
+            // httpclient5 5.5.2 pins the vulnerable httpcore5 5.3.6 in its
+            // POM; 5.6.5 is the first line whose POM declares httpcore5
+            // 5.4.4, keeping the SBOM free of the 5.3.6 node.
+            dependency 'org.apache.httpcomponents.client5:httpclient5:5.6.5'
+            // Spring Boot 3.5.x BOM pins rabbitmq amqp-client 5.25.0, which
+            // is vulnerable to ten advisories (GHSA-93j5-89vc-pph4,
+            // GHSA-68mj-5wr7-6fgg, GHSA-6g32-pxv4-2wfj,
+            // GHSA-jh4v-gfqj-7rhx, GHSA-qx7j-jv8m-fppr,
+            // GHSA-5m9f-rphj-c435, GHSA-h6w7-qmcm-q6xr,
+            // GHSA-7822-rcf6-97fx, GHSA-cqgh-8p3p-mx4m,
+            // GHSA-5xwg-cfvj-gff5). The deepest fix in the series is
+            // 5.36.1; pin the latest 5.37.0 release.
+            dependency 'com.rabbitmq:amqp-client:5.37.0'
+            // eureka-client 2.0.6 pulls Apache HttpClient 4.5.3, which is
+            // vulnerable to GHSA-7r82-7xv7-xcpj (XSS in request URI handling,
+            // fixed in 4.5.13). Pin the last 4.5.x release.
+            dependency 'org.apache.httpcomponents:httpclient:4.5.14'
+            // commons-lang3 3.17.0 is vulnerable to GHSA-j288-q9x7-2f5v
+            // (Uncontrolled Recursion, fixed in 3.18.0).
+            dependency 'org.apache.commons:commons-lang3:3.18.0'
+            // The legacy Testcontainers 1.21.4 modules (postgresql,
+            // junit-jupiter) still declare commons-compress 1.24.0, which is
+            // affected by GHSA-4265-ccf5-phj5 and GHSA-4g9r-vxhx-9pgx (both
+            // fixed in 1.26.0). The Testcontainers 2.0.2 core already brings
+            // 1.28.0; pin it explicitly so no legacy module can downgrade the
+            // test classpath.
+            dependency 'org.apache.commons:commons-compress:1.28.0'
         }
     }
 
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
+        testLogging {
+            events 'failed', 'skipped'
+            exceptionFormat 'full'
+        }
+        filter {
+            // Modules without integration test classes must not fail the build.
+            failOnNoMatchingTests = false
+        }
+    }
+
+    tasks.named('test') {
+        filter {
+            integrationTestPatterns.each { pattern ->
+                excludeTestsMatching pattern
+            }
+        }
+    }
+
+    def integrationTest = tasks.register('integrationTest', Test) {
+        description = 'Runs Spring context, persistence, and Testcontainers integration tests.'
+        group = 'verification'
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        shouldRunAfter tasks.named('test')
+        filter {
+            integrationTestPatterns.each { pattern ->
+                includeTestsMatching pattern
+            }
+        }
+    }
+
+    jacoco {
+        toolVersion = '0.8.12'
+    }
+
+    tasks.named('jacocoTestReport') {
+        dependsOn tasks.named('test'), integrationTest
+        executionData fileTree("${buildDir}/jacoco").include('*.exec')
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    tasks.register('jacocoIntegrationTestReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
+        description = 'Generates JaCoCo XML and HTML reports for integration tests.'
+        group = 'verification'
+        dependsOn integrationTest
+        executionData fileTree("${buildDir}/jacoco").include('integrationTest.exec')
+        sourceSets sourceSets.main
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    // CI-only task: regenerates the JaCoCo XML reports from execution data that
+    // was shipped as an artifact, without re-running any tests. Unlike
+    // jacocoTestReport/jacocoIntegrationTestReport it has no test dependencies,
+    // so it works even when 'test'/'integrationTest' are excluded on the runner.
+    tasks.register('jacocoXmlReportsFromExec', org.gradle.testing.jacoco.tasks.JacocoReport) {
+        description = 'Generates JaCoCo XML/HTML reports from existing execution data without running tests.'
+        group = 'verification'
+        executionData fileTree("${buildDir}/jacoco").include('*.exec')
+        sourceSets sourceSets.main
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+
+    spotbugs {
+        ignoreFailures = false
+        excludeFilter = file("${rootDir}/config/spotbugs/exclude.xml")
+    }
+
+    tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
+        reports {
+            xml.required = true
+        }
+    }
+
+    spotless {
+        java {
+            removeUnusedImports()
+            trimTrailingWhitespace()
+            // Intentionally no endWithNewline(): the repository historically
+            // contains files without a trailing newline and we keep the diff
+            // minimal — enforced trailing newlines would rewrite dozens of
+            // untouched files on every first run.
+        }
+    }
+
+    // GHSA-264p-99wq-f4j6 (Ion Java StackOverflow, CVE-2024-21634) affects
+    // software.amazon.ion:ion-java < 1.10.5. That coordinate line is
+    // abandoned (last release 1.5.1) and has no fixed release; the fix only
+    // exists in com.amazon.ion:ion-java >= 1.10.5, which ships the same
+    // com.amazon.ion.* classes. Substitute any transitive pull of the old
+    // coordinates with the patched artifact.
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute module('software.amazon.ion:ion-java') using module('com.amazon.ion:ion-java:1.12.1')
+        }
+    }
+
+    // Coverage gate ONLY for services that are deployed and have tests.
+    // config-service and discovery-service do not deploy and have no meaningful
+    // test coverage — the gate would fail those modules.
+    if (name in ['account-service', 'bill-service', 'deposit-service', 'notification-service', 'gateway-service']) {
+        tasks.named('jacocoTestCoverageVerification') {
+            dependsOn tasks.named('test'), integrationTest
+            executionData fileTree("${buildDir}/jacoco").include('*.exec')
+            violationRules {
+                rule {
+                    limit {
+                        counter = 'LINE'
+                        value = 'COVEREDRATIO'
+                        minimum = 0.60
+                    }
+                }
+            }
+        }
+        check.dependsOn tasks.named('jacocoTestCoverageVerification')
+    }
+}
+
+// common-test-lib declares test tooling (Testcontainers, AssertJ, Mockito) as
+// api dependencies. It is not part of any shipped artifact, so its Direct SBOM
+// must not contribute test-only components to the runtime SBOM.
+project(':common-test-lib') {
+    tasks.matching { it.name == 'cyclonedxDirectBom' }.configureEach {
+        enabled = false
+    }
+}
+
+sonar {
+    properties {
+        property 'sonar.projectKey', System.getenv('SONAR_PROJECT_KEY') ?: 'kirillshilets_banking-microservices'
+        property 'sonar.projectName', 'banking-microservices'
+        property 'sonar.sourceEncoding', 'UTF-8'
+        property 'sonar.exclusions', '**/src/main/resources/**,**/build/**'
+        property 'sonar.coverage.jacoco.xmlReportPaths', subprojects.collect {
+            new File(it.projectDir, 'build/reports/jacoco/test/jacocoTestReport.xml').absolutePath
+        }.join(',') + ',' + subprojects.collect {
+            new File(it.projectDir, 'build/reports/jacoco/jacocoIntegrationTestReport/jacocoIntegrationTestReport.xml').absolutePath
+        }.join(',') + ',' + subprojects.collect {
+            new File(it.projectDir, 'build/reports/jacoco/jacocoXmlReportsFromExec/jacocoXmlReportsFromExec.xml').absolutePath
+        }.join(',')
+        property 'sonar.java.binaries', subprojects.collect {
+            new File(it.projectDir, 'build/classes/java/main').absolutePath
+        }.join(',')
+        property 'sonar.junit.reportPaths', subprojects.collect {
+            [new File(it.projectDir, 'build/test-results/test').absolutePath,
+             new File(it.projectDir, 'build/test-results/integrationTest').absolutePath]
+        }.flatten().join(',')
+        property 'sonar.java.spotbugs.reportPaths', subprojects.collect {
+            new File(it.projectDir, 'build/reports/spotbugs/main.xml').absolutePath
+        }.join(',')
+        System.getenv('SONAR_HOST_URL')?.with { hostUrl ->
+            property 'sonar.host.url', hostUrl
+        }
+        property 'sonar.organization', System.getenv('SONAR_ORGANIZATION') ?: 'kirillshilets'
     }
 }

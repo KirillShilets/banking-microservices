@@ -1,6 +1,4 @@
-﻿export const DEFAULT_GATEWAY_URL = 'http://localhost:8989'
+import { appConfig } from '../../config'
 
-export const API_BASE_URL =
-  import.meta.env.VITE_GATEWAY_URL?.trim() || DEFAULT_GATEWAY_URL
-
+export const API_BASE_URL = appConfig.gatewayUrl
 export const API_TIMEOUT_MS = 12_000

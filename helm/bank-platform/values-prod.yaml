@@ -1,0 +1,94 @@
+global:
+  environment: prod
+  imageRegistry: "ghcr.io/kirillshilets"
+  existingSecret: "bank-app-secrets"
+  imagePullSecrets:
+    - name: ghcr-pull
+  keycloak:
+    issuerUri: "https://auth.bank.example.com/realms/bank-realm"
+    jwkSetUri: "https://auth.bank.example.com/realms/bank-realm/protocol/openid-connect/certs"
+  springProfilesActive: "kubernetes,production"
+  external:
+    rabbitmqHost: "rabbitmq.cluster.local"
+    rabbitmqPort: 5672
+  topologySpreadConstraints:
+    enabled: true
+    whenUnsatisfiable: DoNotSchedule
+
+externalServices:
+  postgres:
+    enabled: false
+  rabbitmq:
+    enabled: false
+
+resources:
+  spring:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  gateway:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  frontend:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 64Mi
+
+services:
+  config-service:
+    replicas: 2
+    image:
+      # Placeholder until the first promotion writes the real saved.
+      # A zero digest is never resolvable, so an accidental pull fails fast.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  discovery-service:
+    enabled: false
+  account-service:
+    replicas: 3
+    image:
+      # Placeholder until the first promotion writes the real saved.
+      # A zero digest is never resolvable, so an accidental pull fails fast.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  bill-service:
+    replicas: 3
+    image:
+      # Placeholder until the first promotion writes the real saved.
+      # A zero digest is never resolvable, so an accidental pull fails fast.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    env:
+      APP_SANDBOX_DEPOSITS_ENABLED: "false"
+      DEPOSIT_MIN_AMOUNT: "10.00"
+  deposit-service:
+    replicas: 3
+    image:
+      # Placeholder until the first promotion writes the real saved.
+      # A zero digest is never resolvable, so an accidental pull fails fast.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  notification-service:
+    replicas: 1
+    image:
+      # Placeholder until the first promotion writes the real saved.
+      # A zero digest is never resolvable, so an accidental pull fails fast.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  gateway-service:
+    replicas: 3
+    image:
+      # Placeholder until the first promotion writes the real saved.
+      # A zero digest is never resolvable, so an accidental pull fails fast.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  frontend:
+    replicas: 3
+    image:
+      # Placeholder until the first promotion writes the real saved.
+      # A zero digest is never resolvable, so an accidental pull fails fast.
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

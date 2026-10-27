@@ -17,12 +17,15 @@ WORKDIR /app/notification-service
 
 RUN gradle clean bootJar --no-daemon -x test
 
-FROM eclipse-temurin:17-jre-alpine
+# Runtime base pinned to a digest: mutable tags are not reproducible for a banking runtime.
+FROM eclipse-temurin:17-jre-alpine@sha256:3c472129dc75a8d1d7a3f2df5b2093a8077e4493deff046754d4764d0371de63
 
-RUN apk add --no-cache curl \
-    && addgroup -S app && adduser -S app -G app
+# Non-root runtime user with a fixed UID (matches the Helm runAsUser/fsGroup 10001).
+# curl is intentionally omitted: liveness/readiness probes are kubelet httpGet,
+# not shell exec, so no shell tooling is needed in the runtime image.
+RUN addgroup -S app -g 10001 && adduser -S app -u 10001 -G app
 
-USER app
+USER 10001
 WORKDIR /app
 
 COPY --from=builder /app/notification-service/build/libs/*.jar app.jar

@@ -12,7 +12,6 @@ import org.bank.exception.NotFoundException;
 import org.bank.account.entity.Account;
 import org.bank.account.repository.AccountRepository;
 import org.bank.messaging.dto.CreateBillsCommandDTO;
-import org.bank.messaging.dto.DeleteBillsByAccountCommandDTO;
 import org.bank.validation.BillOpeningValidator;
 import org.bank.security.BankRoles;
 import org.bank.security.web.AuthenticatedUser;

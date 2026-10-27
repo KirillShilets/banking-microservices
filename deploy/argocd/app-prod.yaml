@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bank-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: bank
+  source:
+    repoURL: https://github.com/kirillshilets/spring-cloud-banking-system.git
+    targetRevision: promote/prod
+    path: helm/bank-platform
+    helm:
+      releaseName: bank
+      valueFiles:
+        - values-managed.yaml
+        - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: bank-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }

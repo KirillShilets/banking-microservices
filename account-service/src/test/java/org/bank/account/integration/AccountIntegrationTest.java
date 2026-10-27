@@ -8,7 +8,6 @@ import org.bank.account.messaging.BillCommandGateway;
 import org.bank.account.repository.AccountRepository;
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.dto.request.CreateBillRequestDTO;
-import org.bank.messaging.dto.CreateBillsCommandDTO;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

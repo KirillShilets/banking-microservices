@@ -19,11 +19,21 @@ public final class KeycloakJwtAuthenticationConverter
 
     private static final String ROLE_PREFIX = "ROLE_";
 
-    private final JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();
+    private final Converter<Jwt, Collection<GrantedAuthority>> scopeConverter;
+
+    public KeycloakJwtAuthenticationConverter() {
+        this(new JwtGrantedAuthoritiesConverter());
+    }
+
+    KeycloakJwtAuthenticationConverter(Converter<Jwt, Collection<GrantedAuthority>> scopeConverter) {
+        this.scopeConverter = scopeConverter;
+    }
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
-        Collection<GrantedAuthority> authorities = new ArrayList<>(scopeConverter.convert(jwt));
+        Collection<GrantedAuthority> scopedAuthorities = scopeConverter.convert(jwt);
+        Collection<GrantedAuthority> authorities = new ArrayList<>(
+                scopedAuthorities != null ? scopedAuthorities : List.of());
         authorities.addAll(realmRoles(jwt));
         return new JwtAuthenticationToken(jwt, authorities, jwt.getSubject());
     }

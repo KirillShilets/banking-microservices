@@ -1,0 +1,53 @@
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 1'  # weekly, Monday 03:17 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['java-kotlin', 'javascript-typescript']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Set up JDK
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          java-version: '17'
+          distribution: temurin
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        if: matrix.language == 'java-kotlin'
+        run: chmod +x gradlew
+
+      # Manual build: CodeQL does not understand Gradle's configuration cache.
+      - name: Build with Gradle (no tests)
+        if: matrix.language == 'java-kotlin'
+        run: ./gradlew assemble -x test --no-daemon
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
+        with:
+          category: '/language:${{ matrix.language }}'

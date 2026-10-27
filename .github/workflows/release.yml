@@ -1,0 +1,209 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '17'
+
+jobs:
+  guard:
+    name: Guard release tag provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag points at the current main head
+        run: |
+          set -euo pipefail
+          git fetch origin main --quiet
+          TAG_SHA=$(git rev-parse HEAD)
+          MAIN_SHA=$(git rev-parse origin/main)
+          if [ "$TAG_SHA" != "$MAIN_SHA" ]; then
+            echo "ERROR: tag ${GITHUB_REF_NAME} points to ${TAG_SHA}, but main HEAD is ${MAIN_SHA}." >&2
+            echo "Releases must be cut from a fully-tested main commit (release-please flow)." >&2
+            exit 1
+          fi
+          echo "Release tag ${GITHUB_REF_NAME} verified against main HEAD ${MAIN_SHA}"
+
+  release-complete:
+    name: All images and chart published
+    needs: [images, chart]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Release ${{ github.ref_name }} complete"
+
+  images:
+    name: Image ${{ matrix.name }}
+    needs: [guard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      account-service: ${{ steps.collect.outputs.account-service }}
+      bill-service: ${{ steps.collect.outputs.bill-service }}
+      deposit-service: ${{ steps.collect.outputs.deposit-service }}
+      notification-service: ${{ steps.collect.outputs.notification-service }}
+      gateway-service: ${{ steps.collect.outputs.gateway-service }}
+      frontend: ${{ steps.collect.outputs.frontend }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: account-service, context: ".", file: account-service/Dockerfile }
+          - { name: bill-service, context: ".", file: bill-service/Dockerfile }
+          - { name: deposit-service, context: ".", file: deposit-service/Dockerfile }
+          - { name: notification-service, context: ".", file: notification-service/Dockerfile }
+          - { name: gateway-service, context: ".", file: gateway-service/Dockerfile }
+          - { name: frontend, context: frontend, file: frontend/Dockerfile }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set OWNER env variable
+        run: echo "OWNER=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 1: push only by sha tag (immutable), with provenance/SBOM
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: ghcr.io/${{ env.OWNER }}/bank/${{ matrix.name }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          provenance: true
+          sbom: true
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.title=bank-${{ matrix.name }}
+            org.opencontainers.image.description=Spring Cloud Banking System ${{ matrix.name }} image
+
+      # Step 2: scan the published digest, not local tar
+      - name: Scan image by digest
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ghcr.io/${{ env.OWNER }}/bank/${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+
+      # Step 3: only if scan passed - assign semantic tag to the same digest
+      - name: Promote digest to release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          docker buildx imagetools create \
+            --tag "ghcr.io/${{ env.OWNER }}/bank/${{ matrix.name }}:${VERSION}" \
+            "ghcr.io/${{ env.OWNER }}/bank/${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+
+      # Verify the semver tag resolves to the exact digest we scanned & signed.
+      # imagetools create can build a NEW multi-arch index with a different digest
+      # than the build output; if so, re-point the tag and retry until the tag
+      # matches the build digest. No external tool dependency (crane/regctl) is
+      # required, and a persistent mismatch fails the release hard.
+      - name: Verify tag resolves to build digest
+        env:
+          OWNER: ${{ env.OWNER }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          REPO="ghcr.io/${OWNER}/bank/${{ matrix.name }}"
+          BUILD_DIGEST="${{ steps.build.outputs.digest }}"
+          TAG_DIGEST=""
+
+          for attempt in 1 2 3 4 5; do
+            TAG_DIGEST="$(docker buildx imagetools inspect "${REPO}:${VERSION}" --format '{{json .Manifest.Digest}}' 2>/dev/null | tr -d '"' || true)"
+            if [[ -n "$TAG_DIGEST" && "$TAG_DIGEST" == "$BUILD_DIGEST" ]]; then
+              echo "Digest verified: $BUILD_DIGEST"
+              exit 0
+            fi
+            echo "Tag digest mismatch (attempt $attempt/5): tag=$TAG_DIGEST build=$BUILD_DIGEST; re-pointing."
+            docker buildx imagetools create \
+              --tag "${REPO}:${VERSION}" \
+              "${REPO}@${BUILD_DIGEST}" >/dev/null
+            sleep 10
+          done
+
+          echo "ERROR: tag ${VERSION} did not resolve to build digest ${BUILD_DIGEST} (got ${TAG_DIGEST})" >&2
+          exit 1
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
+      - name: Sign image by digest
+        run: cosign sign --yes "ghcr.io/${{ env.OWNER }}/bank/${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+
+      # Self-check: make sure the just-created signature verifies against the
+      # build digest before any downstream consumer (promote) leans on it.
+      - name: Verify Cosign signature
+        run: |
+          cosign verify \
+            --certificate-identity-regexp '^https://github.com/${{ github.repository }}/\.github/workflows/release\.yml@refs/tags/v' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "ghcr.io/${{ env.OWNER }}/bank/${{ matrix.name }}@${{ steps.build.outputs.digest }}"
+
+      - name: Attest build provenance and SBOM
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/${{ env.OWNER }}/bank/${{ matrix.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - id: collect
+        run: echo "${{ matrix.name }}=${{ steps.build.outputs.digest }}" >> "$GITHUB_OUTPUT"
+
+  chart:
+    name: Package Helm chart
+    needs: [guard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Compute chart version
+        run: |
+          # Strip the leading "v" from the tag (v1.2.3 -> 1.2.3) - Helm requires semver
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "CHART_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Package chart
+        run: |
+          helm package helm/bank-platform --version "$CHART_VERSION" --app-version "$CHART_VERSION"
+
+      - name: Upload chart artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: helm-chart
+          path: bank-platform-*.tgz
+          retention-days: 1

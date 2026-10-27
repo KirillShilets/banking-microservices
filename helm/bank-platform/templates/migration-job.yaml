@@ -1,0 +1,107 @@
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.enabled $svc.database }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s-migrate" (include "bank-platform.fullname" $) $name }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    "helm.sh/hook": pre-upgrade,pre-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "bank-platform.image" (dict "name" $name "svc" $svc "root" $) | quote }}
+          imagePullPolicy: {{ include "bank-platform.imagePullPolicy" (dict "svc" $svc "root" $) }}
+          # Preserve the image ENTRYPOINT (sh -c "exec java $JAVA_OPTS -jar app.jar")
+          # and append the migration CLI args as "$@". Run the migration in the
+          # isolated LiquibaseMigrationApplication context (common-lib) instead
+          # of the full service application: the full web/controller stack
+          # requires request-scoped security beans (AuthenticatedUser) that do
+          # not exist in a headless migration context, so it fails before
+          # Liquibase runs. CNPG creates the managed databases asynchronously
+          # after its Database CR is applied, so retry for a short bounded
+          # window before giving up (pod-level backoff still applies per
+          # backoffLimit). Keep the loop cheap: a JVM migration attempt takes
+          # tens of seconds, so 5 attempts with 5s sleep is ~2-4 minutes of
+          # worst-case retry.
+          command: ["sh", "-c", "set -e; for attempt in $(seq 1 5); do if java $JAVA_OPTS -Dloader.main=org.bank.migration.LiquibaseMigrationApplication -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher \"$@\"; then exit 0; fi; rc=$?; echo \"migration attempt ${attempt}/5 failed (exit ${rc}); retrying in 5s\" >&2; sleep 5; done; exit 1"]
+          args:
+            - --spring.profiles.active=kubernetes,migrate
+            - --spring.liquibase.enabled=true
+            - --spring.main.web-application-type=none
+            - --spring.rabbitmq.listener.simple.auto-startup=false
+            - --spring.config.import=
+            - --spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.xml
+          env:
+            {{- range $key, $value := ($svc.env | default dict) }}
+            {{- if ne (toString $value) "" }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with $svc.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- range $key, $value := ($svc.envOverrides | default dict) }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            # The service image application.yml imports configserver:. The app
+            # Deployment disables it via SPRING_CLOUD_CONFIG_ENABLED=false and a
+            # SPRING_CONFIG_LOCATION to the mounted ConfigMap path. A hook Job
+            # cannot mount the release's own ConfigMap (it is created after the
+            # hooks run), so disable the config client and replace the default
+            # classpath locations with a harmless optional one - the Job config
+            # comes entirely from env/args (see env block above).
+            - name: SPRING_CLOUD_CONFIG_ENABLED
+              value: "false"
+            - name: SPRING_CONFIG_LOCATION
+              value: "optional:file:/nonexistent/"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+{{- end }}
+{{- end }}

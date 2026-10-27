@@ -11,7 +11,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $name }}
+  name: {{ printf "%s-%s" (include "bank-platform.fullname" $root) $name }}
   namespace: {{ $root.Release.Namespace }}
   labels:
     {{- include "bank-platform.serviceLabels" (dict "name" $name "svc" $svc "root" $root) | nindent 4 }}
@@ -86,7 +86,7 @@ spec:
             - name: SPRING_CONFIG_LOCATION
               value: {{ printf "file:%s/" $root.Values.applicationConfig.mountPath | quote }}
             - name: SPRING_CONFIG_NAME
-              value: {{ printf "application,%s" $name | quote }}
+              value: {{ printf "application,%s,%s-kubernetes" $name $name | quote }}
             - name: SPRING_APPLICATION_NAME
               value: {{ $name | quote }}
             - name: SPRING_CLOUD_CONFIG_ENABLED

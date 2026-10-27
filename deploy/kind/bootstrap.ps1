@@ -29,6 +29,13 @@ function Invoke-Native {
     if ($LASTEXITCODE -ne 0) { throw "$Name $($Arguments -join ' ') failed with exit code $LASTEXITCODE." }
 }
 
+function kubectl_apply_crds {
+    # CRD bundles (RabbitMQ, CNPG, cert-manager) exceed the 262144-byte
+    # last-applied-configuration annotation limit under client-side apply.
+    param([Parameter(Mandatory)][string] $Url)
+    kubectl apply --server-side --force-conflicts -f "$Url"
+}
+
 function Install-HelmRelease {
     param([string] $Name, [string] $Chart, [string] $Namespace, [string] $Version, [string[]] $ExtraArgs = @())
     $installArgs = @('upgrade', '--install', $Name, $Chart, '--namespace', $Namespace, '--create-namespace', '--version', $Version) + $ExtraArgs
@@ -45,7 +52,7 @@ if (-not $SkipCluster) {
     }
 
     Write-Host '==> Installing ingress-nginx' -ForegroundColor Cyan
-    Invoke-Native -Name 'kubectl' -Arguments @('apply', '-f', 'https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml')
+    kubectl_apply_crds 'https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml'
     Invoke-Native -Name 'kubectl' -Arguments @('wait', '--namespace', 'ingress-nginx', '--for=condition=ready', 'pod', '--selector=app.kubernetes.io/component=controller', '--timeout=300s')
 }
 
@@ -59,6 +66,13 @@ try {
 if ($LASTEXITCODE -ne 0) {
     Invoke-Native -Name 'kubectl' -Arguments @('create', 'namespace', $Namespace)
 }
+
+# Pod Security Admission at minimum warn/audit for kind; restricted is enforced
+# in staging/prod via deploy/k8s/namespaces/namespaces.yaml.
+Invoke-Native -Name 'kubectl' -Arguments @('label', 'namespace', $Namespace,
+    'pod-security.kubernetes.io/warn=restricted',
+    'pod-security.kubernetes.io/audit=restricted',
+    '--overwrite') 
 
 if (-not $SkipSecrets) {
     Write-Host '==> Creating application and infrastructure Secrets' -ForegroundColor Cyan
@@ -79,13 +93,13 @@ Install-HelmRelease -Name 'plugin-barman-cloud' -Chart 'cnpg/plugin-barman-cloud
 Invoke-Native -Name 'kubectl' -Arguments @('rollout', 'status', 'deployment/plugin-barman-cloud', '-n', 'cnpg-system', '--timeout=300s')
 
 Write-Host '==> Installing RabbitMQ operators' -ForegroundColor Cyan
-Invoke-Native -Name 'kubectl' -Arguments @('apply', '-f', 'https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.3/cluster-operator.yml')
+kubectl_apply_crds 'https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.3/cluster-operator.yml'
 Invoke-Native -Name 'kubectl' -Arguments @('rollout', 'status', 'deployment/rabbitmq-cluster-operator', '-n', 'rabbitmq-system', '--timeout=300s')
-Invoke-Native -Name 'kubectl' -Arguments @('apply', '-f', 'https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.0/messaging-topology-operator-with-certmanager.yaml')
+kubectl_apply_crds 'https://github.com/rabbitmq/messaging-topology-operator/releases/download/v1.20.0/messaging-topology-operator-with-certmanager.yaml'
 Invoke-Native -Name 'kubectl' -Arguments @('rollout', 'status', 'deployment/messaging-topology-operator', '-n', 'rabbitmq-system', '--timeout=300s')
 
 Write-Host '==> Installing Keycloak Operator in the application namespace' -ForegroundColor Cyan
-Invoke-Native -Name 'kubectl' -Arguments @('apply', '-k', (Join-Path $infraPath 'keycloak\operator'))
+kubectl apply --server-side --force-conflicts -k (Join-Path $infraPath 'keycloak\operator')
 Invoke-Native -Name 'kubectl' -Arguments @('rollout', 'status', 'deployment/keycloak-operator', '-n', $Namespace, '--timeout=300s')
 
 Write-Host '==> Deploying MinIO and creating the backup bucket' -ForegroundColor Cyan
@@ -158,7 +172,7 @@ Invoke-Native -Name 'helm' -Arguments @('upgrade', '--install', $ReleaseName, $c
 
 Write-Host '==> Waiting for application rollouts' -ForegroundColor Cyan
 foreach ($service in 'account-service', 'bill-service', 'deposit-service', 'notification-service', 'gateway-service', 'frontend') {
-    Invoke-Native -Name 'kubectl' -Arguments @('-n', $Namespace, 'rollout', 'status', "deploy/$service", '--timeout=300s')
+    Invoke-Native -Name 'kubectl' -Arguments @('-n', $Namespace, 'rollout', 'status', "deploy/bank-$service", '--timeout=300s')
 }
 
 Write-Host ''
