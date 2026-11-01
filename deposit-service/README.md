@@ -12,7 +12,7 @@
 
 ## 📡 HTTP API
 
-Сервис доступен через Gateway на http://localhost:8989.
+Сервис доступен через Gateway: http://api.localhost (внутри кластера Gateway слушает порт 8989 и наружу не публикуется).
 
 | Метод | URL | Доступ |
 |---|---|---|
@@ -26,7 +26,7 @@
 - база: deposit_service_database;
 - очередь: bank.deposit.save.queue;
 - routing key: deposit.save;
-- discovery: Eureka.
+- discovery: Eureka — только для локального запуска; в Kubernetes отключена.
 
 ## 🧪 Тесты
 

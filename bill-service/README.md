@@ -14,7 +14,7 @@
 
 ## 📡 HTTP API
 
-Внешний URL: http://localhost:8989.
+Внешний URL: http://api.localhost (внутри кластера Gateway слушает порт 8989 и наружу не публикуется).
 
 | Метод | URL | Описание |
 |---|---|---|
@@ -24,7 +24,7 @@
 | POST | /bills/accounts/{accountId} | создать несколько счетов |
 | POST | /bills/sandbox/deposits | sandbox-пополнение |
 
-Sandbox-пополнение доступно только ролям employee и admin и только при SANDBOX_DEPOSITS_ENABLED=true. Минимальная сумма задается DEPOSIT_MIN_AMOUNT.
+Sandbox-пополнение доступно только ролям employee и admin и только при `APP_SANDBOX_DEPOSITS_ENABLED=true` (свойство `app.sandbox.deposits-enabled`). Минимальная сумма задается `DEPOSIT_MIN_AMOUNT`.
 
 Пример:
 
@@ -43,9 +43,9 @@ Sandbox-пополнение доступно только ролям employee �
 
 - порт: 8082;
 - база: bill_service_database;
-- DEPOSIT_MIN_AMOUNT по умолчанию 2.60 в конфигурации сервиса;
-- SANDBOX_DEPOSITS_ENABLED по умолчанию false;
-- discovery: Eureka;
+- `DEPOSIT_MIN_AMOUNT` — минимальная сумма пополнения, по умолчанию 2.60, задается в конфигурации сервиса;
+- `APP_SANDBOX_DEPOSITS_ENABLED` (`app.sandbox.deposits-enabled`) — по умолчанию false, в kind включён в `helm/bank-platform/values-kind.yaml`;
+- discovery: Eureka — только для локального запуска; в Kubernetes discovery отключена, сервис адресуется по Kubernetes DNS;
 - messaging: RabbitMQ.
 
 ## 🧪 Тесты

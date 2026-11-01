@@ -18,23 +18,28 @@
 
 ## 📧 SMTP
 
-Параметры задаются в .env:
+Учетные данные задаются в `.env` и попадают в Kubernetes Secret:
 
 ~~~env
-MAIL_HOST=smtp.example.com
-MAIL_PORT=587
 MAIL_USERNAME=mail@example.com
 MAIL_PASSWORD=change-me
 ~~~
 
-Для Gmail требуется app password и доступность smtp.gmail.com:587 из Docker. SMTP-ошибка не должна блокировать Docker healthcheck: mail health отключен, а проверка контейнера использует /actuator/health/liveness.
+Сервер и порт — это не секреты, они задаются в Helm-значениях (`services.notification-service.env` в `helm/bank-platform/values-kind.yaml`):
+
+~~~yaml
+MAIL_HOST: smtp.gmail.com
+MAIL_PORT: "587"
+~~~
+
+Для Gmail требуется app password и доступность smtp.gmail.com:587 из кластера (в kind — через Docker Desktop). SMTP-ошибка не должна блокировать проверку готовности: mail health отключен, а проба использует /actuator/health/liveness.
 
 ## ⚙️ Конфигурация
 
 - порт: 9999;
 - база: notification_service_database;
 - очередь: bank.notification.deposit.queue;
-- discovery: Eureka;
+- discovery: Eureka — только для локального запуска; в Kubernetes отключена;
 - messaging: RabbitMQ.
 
 ## 🧪 Тесты
