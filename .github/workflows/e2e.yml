@@ -1,20 +1,8 @@
 name: e2e
 
+# Кластер e2e больше не создаётся автоматически — только по запросу
+# (Workflow_dispatch), чтобы случайно не расходовать ресурсы CI.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-    # Run e2e only when the diff touches code, deployment or chart files.
-    paths:
-      - '**/*.java'
-      - '**/*.gradle'
-      - '**/*.yml'
-      - '**/*.yaml'
-      - 'Dockerfile*'
-      - 'frontend/**'
-      - 'deploy/**'
-      - 'helm/**'
   workflow_dispatch:
 
 concurrency:
@@ -35,33 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Filter changed code paths
-        id: filter
-        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
-        with:
-          filters: |
-            code:
-              - '**/*.java'
-              - '**/*.gradle'
-              - '**/*.yml'
-              - '**/*.yaml'
-              - 'Dockerfile*'
-              - 'frontend/**'
-              - 'deploy/**'
-              - 'helm/**'
-
-      - name: Skip when no code changes
-        if: steps.filter.outputs.code == 'false'
-        run: echo "No code changes; skipping e2e"
+      # Автоматический запуск e2e отключён — кластер создаётся только при
+      # ручном запуске workflow_dispatch (через кнопку "Run workflow").
+      # Блоки фильтрации изменений удалены, так как все шаги выполняются
+      # при ручном запуске.
 
       - name: Set up Helm
-        if: steps.filter.outputs.code == 'true'
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
         with:
           version: v3.16.4
 
       - name: Set up kind cluster
-        if: steps.filter.outputs.code == 'true'
         uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1
         with:
           install_only: 'true'
@@ -70,17 +42,14 @@ jobs:
           config: deploy/kind/kind-cluster-ci.yaml
 
       - name: Generate CI .env
-        if: steps.filter.outputs.code == 'true'
         run: bash deploy/ci/gen-env.sh "$ENV_FILE"
 
       - name: Generate CI smoke credentials
-        if: steps.filter.outputs.code == 'true'
         run: |
           # Fresh random password per run; never reuse demo credentials.
           echo "CI_PASS=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
 
       - name: Overlay CI realm (ci-smoke client, no TLS, random creds)
-        if: steps.filter.outputs.code == 'true'
         env:
           REALM_USER_PASSWORD: ${{ env.CI_PASS }}
         run: |
@@ -91,7 +60,6 @@ jobs:
             "$RUNNER_TEMP/bank-realm-ci.json"
 
       - name: Bootstrap platform (cluster, operators, infra, images, helm)
-        if: steps.filter.outputs.code == 'true'
         env:
           ENV_FILE: "${{ env.ENV_FILE }}"
           REALM_FILE: "${{ runner.temp }}/bank-realm-ci.json"
@@ -100,7 +68,6 @@ jobs:
         run: bash deploy/kind/bootstrap.sh
 
       - name: Run smoke tests
-        if: steps.filter.outputs.code == 'true'
         env:
           CI_USER: customer.kira
           # Random CI realm password generated earlier in this workflow.
@@ -109,7 +76,7 @@ jobs:
         run: bash deploy/ci/smoke.sh
 
       - name: Collect troubleshooting info on failure
-        if: failure() && steps.filter.outputs.code == 'true'
+        if: failure()
         run: |
           echo "===== PODS -A ====="
           kubectl get pods -A || true
@@ -122,5 +89,5 @@ jobs:
           done
 
       - name: Delete kind cluster
-        if: always() && steps.filter.outputs.code == 'true'
+        if: always()
         run: kind delete cluster --name bank-ci || true

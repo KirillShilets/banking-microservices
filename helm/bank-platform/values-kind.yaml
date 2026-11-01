@@ -19,7 +19,10 @@ externalServices:
 
 probes:
   startup:
-    failureThreshold: 60
+    # A cold Spring Boot start on a loaded kind node can exceed five minutes,
+    # especially after Docker Desktop/sandbox restarts. Allow up to ten minutes
+    # before kubelet restarts the container (60 * 5s was too tight).
+    failureThreshold: 120
     timeoutSeconds: 5
   readiness:
     timeoutSeconds: 5
@@ -76,7 +79,9 @@ services:
     replicas: 1
 
 networkPolicies:
-  # kindnet does not enforce NetworkPolicy; enable them anyway so the manifests
-  # render and are exercised. The namespace carries warn/audit PSA labels
-  # applied by bootstrap.sh/bootstrap.ps1.
-  enabled: true
+  # In kind, PostgreSQL/RabbitMQ/Keycloak share the application namespace. A
+  # namespace-wide default-deny policy therefore blocks CNPG's operator and the
+  # instance-manager API, leaving the cluster without a primary. Managed
+  # environments use a separate infraNamespace where the same policies are
+  # safe; keep them disabled for the single-namespace local setup.
+  enabled: false
