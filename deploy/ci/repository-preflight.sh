@@ -51,7 +51,7 @@ validate_workflow_shape() {
 validate_tracked_environment_files() {
     local path
     while IFS= read -r path; do
-        [[ "$path" == '.env.example' ]] \
+        [[ "$path" == *.env.example ]] \
             || fail "environment file with possible secrets is tracked: $path"
     done < <(git -C "$REPO_ROOT" ls-files | grep -E '(^|/)\.env($|\.)' || true)
 }

@@ -50,7 +50,7 @@ spec:
           # backoffLimit). Keep the loop cheap: a JVM migration attempt takes
           # tens of seconds, so 5 attempts with 5s sleep is ~2-4 minutes of
           # worst-case retry.
-          # `sh -c <script> <arg0> <arg1> ...` puts the first Kubernetes arg
+          # `sh -c SCRIPT ARG0 ARG1 ...` puts the first Kubernetes arg
           # into $0, not $@. Pass both so the first Spring flag (the active
           # profiles) is not silently dropped.
           command: ["sh", "-c", "set -e; for attempt in $(seq 1 5); do if java $JAVA_OPTS -Dloader.main=org.bank.migration.LiquibaseMigrationApplication -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher \"$0\" \"$@\"; then exit 0; fi; rc=$?; echo \"migration attempt ${attempt}/5 failed (exit ${rc}); retrying in 5s\" >&2; sleep 5; done; exit 1"]
