@@ -71,7 +71,7 @@ notification-service (ClusterIP) <-- email-уведомления
 
 - Docker Desktop с включенным Docker Engine;
 - Java 17 для запуска Gradle-тестов локально;
-- Node.js 20+ — только для локальной разработки frontend;
+- Node.js 22+ — только для локальной разработки frontend;
 - kubectl, Helm и kind;
 - PowerShell — скрипты развёртывания написаны на PowerShell;
 - свободные порты 80 и 443 на хосте: ingress-nginx публикуется именно на них.

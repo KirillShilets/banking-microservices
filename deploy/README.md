@@ -4,7 +4,7 @@ Kubernetes is the only supported runtime in this repository. The Helm chart depl
 
 ## Local kind deployment
 
-1. Install Docker Desktop, kind, kubectl, Helm, Java 17, Node.js 20 and PowerShell.
+1. Install Docker Desktop, kind, kubectl, Helm, Java 17, Node.js 22 and PowerShell.
 2. Copy `.env.example` to `.env` and replace every `change-me` password with a unique value. Set the SMTP username and password. To select a different SMTP server, update `services.notification-service.env.MAIL_HOST` and `MAIL_PORT` in `helm/bank-platform/values-kind.yaml`. Do not commit `.env`.
 3. From the repository root, run:
 
