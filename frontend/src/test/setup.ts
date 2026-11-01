@@ -6,8 +6,6 @@ afterEach(() => {
   cleanup()
 })
 
-// Framer Motion and the responsive UI use browser APIs that jsdom does not
-// implement. Minimal shims keep component tests focused on behaviour.
 if (!window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -41,3 +39,43 @@ Object.defineProperty(window, 'scrollTo', {
   writable: true,
   value: vi.fn(),
 })
+
+/**
+ * MSW 3.0.3 resets its handler controller with the ES2025 Set helpers
+ * (`intersection`, `difference`). They ship in Node 22+, while the frontend CI
+ * jobs run on Node 20, so both methods are provided when missing.
+ */
+type SetWithEs2025 = Set<unknown> & {
+  intersection?: (other: Set<unknown>) => Set<unknown>
+  difference?: (other: Set<unknown>) => Set<unknown>
+}
+
+const setPrototype = Set.prototype as SetWithEs2025
+
+if (typeof setPrototype.intersection !== 'function') {
+  Object.defineProperty(setPrototype, 'intersection', {
+    writable: true,
+    configurable: true,
+    value(this: Set<unknown>, other: Set<unknown>) {
+      const result = new Set<unknown>()
+      for (const item of this) {
+        if (other.has(item)) result.add(item)
+      }
+      return result
+    },
+  })
+}
+
+if (typeof setPrototype.difference !== 'function') {
+  Object.defineProperty(setPrototype, 'difference', {
+    writable: true,
+    configurable: true,
+    value(this: Set<unknown>, other: Set<unknown>) {
+      const result = new Set<unknown>()
+      for (const item of this) {
+        if (!other.has(item)) result.add(item)
+      }
+      return result
+    },
+  })
+}
