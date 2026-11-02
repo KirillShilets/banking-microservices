@@ -5,6 +5,8 @@ export default defineConfig({
     plugins: [react()],
     test: {
         environment: 'jsdom',
+        // v8 instrumentation makes the multi-page smoke test ~3x slower than a plain run.
+        testTimeout: 15_000,
         setupFiles: './src/test/setup.ts',
         coverage: {
             provider: 'v8',

@@ -95,9 +95,9 @@ describe('application smoke test', () => {
   it('renders the dashboard with account data', async () => {
     renderApplication()
 
-    expect(await screen.findByText('Всего на счетах')).toBeInTheDocument()
+    expect(await screen.findByText('Всего на счетах', undefined, { timeout: 5000 })).toBeInTheDocument()
     expect(
-      await screen.findByRole('heading', { name: 'Мои карты и счета' }),
+      await screen.findByRole('heading', { name: 'Мои карты и счета' }, { timeout: 5000 }),
     ).toBeInTheDocument()
     expect((await screen.findAllByText('482 350 ₽')).length).toBeGreaterThan(0)
     expect(screen.getByText('Последние операции')).toBeInTheDocument()
@@ -107,21 +107,21 @@ describe('application smoke test', () => {
     const browserUser = userEvent.setup()
     renderApplication()
 
-    await screen.findByText('Всего на счетах')
+    await screen.findByText('Всего на счетах', undefined, { timeout: 5000 })
 
     await browserUser.click(screen.getAllByRole('link', { name: 'История' })[0])
     expect(
-      await screen.findByRole('heading', { name: 'История операций' }),
+      await screen.findByRole('heading', { name: 'История операций' }, { timeout: 5000 }),
     ).toBeInTheDocument()
 
     await browserUser.click(screen.getAllByRole('link', { name: 'Платежи' })[0])
     expect(
-      await screen.findByRole('heading', { name: 'Платежи и счета' }),
+      await screen.findByRole('heading', { name: 'Платежи и счета' }, { timeout: 5000 }),
     ).toBeInTheDocument()
 
     await browserUser.click(screen.getAllByRole('link', { name: 'Профиль' })[0])
     expect(
-      await screen.findByRole('heading', { name: 'Профиль и настройки' }),
+      await screen.findByRole('heading', { name: 'Профиль и настройки' }, { timeout: 5000 }),
     ).toBeInTheDocument()
   })
 
@@ -129,7 +129,7 @@ describe('application smoke test', () => {
     renderApplication('/cashback')
 
     expect(
-      await screen.findByRole('heading', { name: 'Кэшбэк' }),
+      await screen.findByRole('heading', { name: 'Кэшбэк' }, { timeout: 5000 }),
     ).toBeInTheDocument()
     expect((await screen.findAllByText('Супермаркеты')).length).toBeGreaterThan(0)
     expect(
