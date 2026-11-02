@@ -288,3 +288,23 @@ Nginx раздаёт SPA с fallback на `index.html`, кэширует хэш�
 создание 3 счетов, sandbox-пополнение на 5 000 ₽ и отображение карт на дашборде.
 
 ![Full-stack dashboard](docs/screenshots/fullstack-dashboard.png)
+
+## Coverage policy
+
+`npm run test:coverage` reports the whole SPA with the v8 provider and writes
+`coverage/lcov.info`, which Sonar reads through `sonar-project.properties`.
+
+- **Included:** everything under `src/`.
+- **Excluded (and why):** `src/main.tsx` (entry point that only mounts React),
+  `src/test/**` (test harness), `**/*.d.ts` and `src/vite-env.d.ts` (type-only).
+- **Global floors (ratchet, only go up):** lines 40, statements 40, functions 35,
+  branches 30. They currently sit just under the measured values
+  (lines 44.4, statements 43.1).
+- **Per-module floors:** `src/lib/money.ts` and `src/lib/validation.ts` at
+  85 lines/statements/functions and 80 branches, because they hold the money and
+  input rules where a regression costs real correctness.
+- **Ratchet:** when a change lifts a metric, raise the floor in the same PR. Never
+  lower a floor without a written reason in the PR description.
+- **Sonar:** the analysis in CI passes these arguments through `-Dsonar.*` in
+  `.github/workflows/ci.yml`; `sonar-project.properties` holds the same values for
+  local runs of `sonar-scanner`. Keep the two in sync.
