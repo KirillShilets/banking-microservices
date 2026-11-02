@@ -71,12 +71,11 @@ export function CardStack({
     <div
       role="region"
       aria-roledescription="карусель"
-      aria-label="Карты"
-      tabIndex={0}
+      aria-label="Карты"
       onKeyDown={handleKeyDown}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
-      className="mx-auto w-full max-w-[320px] rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime/60"
+      className="mx-auto w-full max-w-[320px] rounded-2xl"
       style={{ perspective: '900px' }}
     >
       {/* One card tall: the stage is exactly the active card's box. */}
