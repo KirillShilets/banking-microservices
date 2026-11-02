@@ -4,7 +4,7 @@ Kubernetes is the only supported runtime in this repository. The Helm chart depl
 
 ## Local kind deployment
 
-1. Install Docker Desktop, kind, kubectl, Helm, Java 17, Node.js 20 and PowerShell.
+1. Install Docker Desktop, kind, kubectl, Helm, Java 17, Node.js 22 and PowerShell.
 2. Copy `.env.example` to `.env` and replace every `change-me` password with a unique value. Set the SMTP username and password. To select a different SMTP server, update `services.notification-service.env.MAIL_HOST` and `MAIL_PORT` in `helm/bank-platform/values-kind.yaml`. Do not commit `.env`.
 3. From the repository root, run:
 
@@ -22,6 +22,103 @@ kubectl get secret keycloak-initial-admin -n bank -o jsonpath="{.data.password}"
 ```
 
 The script creates durable secrets for PostgreSQL's service roles, the RabbitMQ app user, MinIO root and PostgreSQL backup access. Generated MinIO credentials are kept in Kubernetes Secrets and are not written into values files. The bootstrap Job creates the `postgres-backups` bucket and a backup-specific MinIO user.
+
+## End-to-end check and current scope
+
+For a clean local run, start Docker Desktop (host ports `80` and `443` must be
+free) and run the bootstrap from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\kind\bootstrap.ps1
+```
+
+`kind-cluster.yaml` publishes host `80/443` to the same container ports on the
+control-plane node, which is exactly what ingress-nginx's kind manifest binds
+via `hostPort`. Do not map those hosts to the NodePort range instead: the
+controller never listens there and every `.localhost` origin answers with an
+empty reply. Clusters created before that mapping was corrected keep working
+through the controller's NodePorts `30080/30443` — the one-time repair is in
+Troubleshooting below.
+
+Expected flow:
+
+1. Open <http://app.localhost> and sign in with `customer.kira` / `Qpass123`.
+2. If the profile has no account yet, create one and choose 3 bills. Bills are
+   opened asynchronously by `bill-service`; the frontend polls briefly and then
+   refreshes the dashboard.
+3. The dashboard shows the cards, balances, cashback selection and history.
+4. Staff can use the sandbox deposit endpoint with an `employee`/`admin` token:
+
+   ```http
+   POST http://api.localhost/bills/sandbox/deposits
+   Authorization: Bearer <employee-token>
+   Content-Type: application/json
+
+   {"billId":1,"amount":"5000.00"}
+   ```
+
+   The balance is updated in `bill-service`; the deposit record and notification
+   are processed asynchronously through RabbitMQ.
+
+## Troubleshooting: `app.localhost` does not respond
+
+Symptom: the browser reports a closed connection, `curl` prints
+`Empty reply from server`, while `kubectl -n bank get pods` shows every pod
+`Running`.
+
+Diagnose the port chain:
+
+```powershell
+# host ports published by the node container
+docker ps --filter name=bank-local-control-plane --format '{{.Ports}}'
+# where ingress-nginx actually listens
+kubectl -n ingress-nginx get svc ingress-nginx-controller
+kubectl -n ingress-nginx get deploy ingress-nginx-controller -o yaml | Select-String 'hostPort'
+```
+
+If the node publishes `80->30080` while the controller Service uses different
+NodePorts, the host port reaches nothing. Repair the existing cluster without
+deleting data by pinning the Service to the published NodePorts:
+
+```powershell
+kubectl -n ingress-nginx patch svc ingress-nginx-controller --type=json `
+  -p '[{"op":"replace","path":"/spec/ports/0/nodePort","value":30080},{"op":"replace","path":"/spec/ports/1/nodePort","value":30443}]'
+```
+
+The durable fix is the port mapping in `deploy/kind/kind-cluster.yaml` (host
+`80/443` to container `80/443`): it applies to newly created clusters, so a
+fresh `kind create cluster` needs no patch. Re-applying the upstream kind
+ingress manifest resets the Service NodePorts, so clusters created with the old
+mapping need the patch again after such a re-apply; running the bootstrap with
+`-SkipCluster` skips the ingress install entirely.
+
+`kubectl port-forward` is not a substitute for the frontend: the OIDC redirect
+URI is registered as `http://app.localhost/*` without a port, so
+`http://app.localhost:8080` is rejected by Keycloak. Port-forwarding is meant for
+API-level checks against `api.localhost:<port>`, which is what `deploy/ci/smoke.sh`
+does on port 18080.
+
+### What this project does
+
+- accounts, bills/accounts, sandbox top-ups, deposit lookup;
+- Keycloak OIDC and role-aware UI (`customer`, `employee`, `admin`);
+- async deposit history and email notification plumbing;
+- card-product presentation and local cashback promo selection in the frontend.
+
+### What is intentionally not implemented
+
+- **P2P transfers between two customers.** There is no transfer endpoint or
+  double-entry ledger in the backend, so the UI cannot move money from one
+  person's card to another. Adding it requires a transactional backend endpoint
+  with idempotency and RabbitMQ events.
+- real card issuing, card acquiring, withdrawals, and real money movement;
+- server-side transaction list: the UI's activity history is device-local;
+- cashback settlement: the selection and estimate are a frontend promo layer.
+
+`networkPolicies.enabled` is deliberately `false` in `values-kind.yaml`: kind
+places PostgreSQL, RabbitMQ and Keycloak in the same namespace as the app, and a
+namespace-wide default-deny policy blocks CNPG's operator/API traffic. Managed
+environments use a separate infra namespace and keep the policies enabled.
 
 ## Infra files
 

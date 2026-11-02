@@ -10,10 +10,15 @@ nodes:
             # ingress-nginx's kind manifest selects on this label.
             node-labels: "ingress-ready=true"
     extraPortMappings:
-      - containerPort: 30080
+      # ingress-nginx's kind manifest (deploy/static/provider/kind) binds
+      # hostPort 80/443 directly on the node, so the node container has to
+      # expose exactly those container ports. Mapping host 80/443 to the
+      # NodePort range (30080/30443) breaks ingress: the controller never
+      # listens there and http://app.localhost answers with an empty reply.
+      - containerPort: 80
         hostPort: 80
         protocol: TCP
-      - containerPort: 30443
+      - containerPort: 443
         hostPort: 443
         protocol: TCP
   - role: worker

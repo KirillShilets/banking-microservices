@@ -3,6 +3,8 @@ node_modules
 
 dist
 dist-ssr
+coverage
+docs
 .vite
 node_modules/.vite
 

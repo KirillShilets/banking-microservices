@@ -4,6 +4,7 @@ import liquibase.Liquibase;
 import liquibase.exception.LiquibaseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
@@ -30,25 +31,38 @@ public class LiquibaseMigrationRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(LiquibaseMigrationRunner.class);
 
-    private final Liquibase liquibase;
+    private final ObjectProvider<Liquibase> liquibaseProvider;
     private final ConfigurableApplicationContext context;
 
-    public LiquibaseMigrationRunner(Liquibase liquibase, ConfigurableApplicationContext context) {
-        this.liquibase = liquibase;
+    public LiquibaseMigrationRunner(
+            ObjectProvider<Liquibase> liquibaseProvider,
+            ConfigurableApplicationContext context
+    ) {
+        this.liquibaseProvider = liquibaseProvider;
         this.context = context;
     }
 
     @Override
     public void run(ApplicationArguments args) {
         int exitCode = 0;
-        try {
-            // Idempotent: already-applied change sets are skipped.
-            liquibase.update("");
-            log.info("Liquibase migration completed successfully");
-        } catch (LiquibaseException e) {
-            log.error("Liquibase migration failed", e);
-            exitCode = 1;
+        Liquibase liquibase = liquibaseProvider.getIfAvailable();
+
+        if (liquibase == null) {
+            // Spring Boot's Liquibase auto-configuration already ran during
+            // context refresh. The standalone bean is not exposed by every
+            // Boot version, so only the explicit update is optional here.
+            log.info("Liquibase auto-configuration completed the migration");
+        } else {
+            try {
+                // Idempotent: already-applied change sets are skipped.
+                liquibase.update("");
+                log.info("Liquibase migration completed successfully");
+            } catch (LiquibaseException e) {
+                log.error("Liquibase migration failed", e);
+                exitCode = 1;
+            }
         }
+
         final int exitCodeForLambda = exitCode;
         SpringApplication.exit(context, () -> exitCodeForLambda);
     }

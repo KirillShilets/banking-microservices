@@ -1,5 +1,7 @@
-﻿export interface DepositRequestDTO {
+import type { DecimalValue } from '../../types/money'
+
+export interface DepositRequestDTO {
   billId: number
-  amount: number
+  amount: DecimalValue
   email: string
 }

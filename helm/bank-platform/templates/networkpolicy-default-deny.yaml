@@ -27,4 +27,12 @@ spec:
         - { protocol: TCP, port: 5432 }
         - { protocol: TCP, port: 5672 }
         - { protocol: TCP, port: 8080 }
+    # CNPG's instance manager and the Barman plugin sidecar talk to the
+    # Kubernetes API. Without this rule the API call times out and the cluster
+    # never reports a primary, which in turn breaks Keycloak's database.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - { protocol: TCP, port: 443 }
 {{- end }}

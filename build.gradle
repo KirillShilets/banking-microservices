@@ -153,6 +153,10 @@ subprojects {
             // 1.28.0; pin it explicitly so no legacy module can downgrade the
             // test classpath.
             dependency 'org.apache.commons:commons-compress:1.28.0'
+            // CVE-2026-102554 (DoS via unthrottled memory allocation during
+            // deserialization) affects Guava 33.0.0-jre pulled transitively;
+            // fixed in 33.7.2.
+            dependency 'com.google.guava:guava:33.7.2-jre'
         }
     }
 

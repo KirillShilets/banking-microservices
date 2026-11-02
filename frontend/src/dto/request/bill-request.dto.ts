@@ -1,10 +1,10 @@
-﻿export interface CreateBillRequestDTO {
-  amount: number
+export interface CreateBillRequestDTO {
+  amount: string
   overdraftEnabled: boolean
 }
 
 export interface BillRequestDTO {
   accountId: number
-  amount: number
+  amount: string
   overdraftEnabled: boolean
 }

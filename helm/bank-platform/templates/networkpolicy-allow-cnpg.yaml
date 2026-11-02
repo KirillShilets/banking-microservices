@@ -1,0 +1,20 @@
+{{- if .Values.networkPolicies.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bank-platform.fullname" . }}-allow-cnpg
+  namespace: {{ .Release.Namespace }}
+spec:
+  # CNPG's operator lives in cnpg-system and probes the instance manager on
+  # :8000. The namespace-wide default-deny policy would otherwise block it.
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+      ports:
+        - { protocol: TCP, port: 8000 }
+        - { protocol: TCP, port: 5432 }
+{{- end }}

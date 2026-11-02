@@ -53,12 +53,12 @@ notification-service (ClusterIP) <-- email-уведомления
 ## 🛠️ Технологии
 
 - Java 17;
-- Spring Boot 3.5.6;
-- Spring Cloud 2025.0.0;
+- Spring Boot 3.5.15;
+- Spring Cloud 2025.0.3;
 - Gradle multi-module;
 - Spring Cloud Gateway WebFlux;
 - Spring Security OAuth2 Resource Server;
-- Keycloak 26;
+- Keycloak 26.8 (Keycloak Operator);
 - PostgreSQL 16, Spring Data JPA, Liquibase;
 - RabbitMQ;
 - React 19, TypeScript, Vite и Axios;
@@ -71,8 +71,10 @@ notification-service (ClusterIP) <-- email-уведомления
 
 - Docker Desktop с включенным Docker Engine;
 - Java 17 для запуска Gradle-тестов локально;
-- Node.js 20+ — только для локальной разработки frontend;
-- kubectl, Helm и kind.
+- Node.js 22+ — только для локальной разработки frontend;
+- kubectl, Helm и kind;
+- PowerShell — скрипты развёртывания написаны на PowerShell;
+- свободные порты 80 и 443 на хосте: ingress-nginx публикуется именно на них.
 
 ### 1️⃣ Подготовить переменные окружения
 
@@ -99,6 +101,8 @@ powershell -ExecutionPolicy Bypass -File deploy\kind\bootstrap.ps1
 - Frontend: http://app.localhost
 - Gateway: http://api.localhost
 - Keycloak: http://keycloak.localhost
+
+Зона `.localhost` относится к secure context, поэтому OIDC-вход с PKCE работает без HTTPS и без правки hosts. Если `app.localhost` не отвечает (пустой ответ, обрыв соединения), значит порты ingress не доехали до хоста: как это диагностировать и починить без пересоздания кластера — раздел Troubleshooting в [deploy/README.md](deploy/README.md).
 
 ### 🧹 Остановка и очистка
 
@@ -131,7 +135,7 @@ helm uninstall bank -n bank
 
 ## 🔐 API через Gateway
 
-Все защищенные запросы выполняются с заголовком:
+Базовый URL — http://api.localhost (внутри кластера Gateway слушает порт 8989, наружу публикуется только Ingress). Все защищенные запросы выполняются с заголовком:
 
 ~~~http
 Authorization: Bearer <access-token>
@@ -156,7 +160,7 @@ Authorization: Bearer <access-token>
 | POST | /bills/accounts/{accountId} | владелец, сотрудник или администратор |
 | POST | /bills/sandbox/deposits | employee или admin при включенном sandbox |
 
-Пополнение требует SANDBOX_DEPOSITS_ENABLED=true и сумму не меньше DEPOSIT_MIN_AMOUNT.
+Пополнение требует `APP_SANDBOX_DEPOSITS_ENABLED=true` (свойство `app.sandbox.deposits-enabled`) и суммы не меньше `DEPOSIT_MIN_AMOUNT`.
 
 ### 💰 Deposits
 
@@ -176,35 +180,61 @@ Authorization: Bearer <access-token>
 
 ## ⚙️ Конфигурация
 
-Основные параметры находятся в .env.example:
+`.env` (шаблон — `.env.example`) содержит только значения, из которых bootstrap создаёт Kubernetes Secrets:
 
-- PostgreSQL и пользователи отдельных баз данных;
-- Keycloak database;
-- RabbitMQ;
-- DEPOSIT_MIN_AMOUNT;
-- SANDBOX_DEPOSITS_ENABLED;
-- SMTP-параметры.
+- пароли ролей PostgreSQL сервисов и базы Keycloak;
+- логин и пароль RabbitMQ;
+- логин и пароль SMTP.
+
+Остальные параметры задаются не через `.env`:
+
+- `DEPOSIT_MIN_AMOUNT` — значение по умолчанию 2.60 задано в конфигурации bill-service и переопределяется одноимённой переменной окружения;
+- `APP_SANDBOX_DEPOSITS_ENABLED` — включает sandbox-пополнение; в kind выставлен в `helm/bank-platform/values-kind.yaml`;
+- `MAIL_HOST` и `MAIL_PORT` — там же, в `values-kind.yaml`.
 
 Настройки Spring-сервисов для Kubernetes находятся в `config-service/src/main/resources/services` и зеркалируются в ConfigMap Helm-чарта. Изменения синхронизируются командой `powershell -File deploy/scripts/sync-config.ps1`.
 
 ## 🧪 Проверка проекта
 
+Backend:
+
 ~~~powershell
 .\gradlew.bat test
 ~~~
 
-Интеграционные тесты используют Testcontainers и требуют работающий Docker Engine. Для frontend:
+Интеграционные тесты используют Testcontainers и требуют работающий Docker Engine.
+
+Frontend:
 
 ~~~powershell
 cd frontend
 npm ci
 npm run lint
+npm test -- --run
 npm run build
 ~~~
 
+### 🧍 Проверка как клиент
+
+Полный стек (нужен развёрнутый кластер из шага 3):
+
+1. откройте http://app.localhost — браузер уведёт на страницу входа Keycloak;
+2. войдите тестовым пользователем из таблицы «Тестовые пользователи Keycloak» выше;
+3. при первом входе профиля ещё нет: создайте аккаунт и выберите 1–20 счетов. Счета открывает bill-service асинхронно, интерфейс сам дождётся их появления;
+4. дальше доступны Главная, Платежи, История, Счета, Кэшбэк и Профиль. Sandbox-пополнение и проверка депозита по ID видны ролям employee и admin.
+
+Только интерфейс, без Keycloak и Java-сервисов (demo-режим на MSW):
+
+~~~powershell
+cd frontend
+npm run dev
+~~~
+
+http://localhost:5173 поднимается с `VITE_DEMO_MODE=true` и `VITE_ENABLE_MOCKS=true` из `.env.development`: MSW отвечает по тем же путям, данные лежат в `localStorage`, роль переключается в Профиль → Демо-роли. Как направить dev-сервер на реальный Gateway и Keycloak, описано в [frontend/README.md](frontend/README.md).
+
 ## 🚀 CI/CD: production-пайплайн
 
- Полный пайплайн описан в `.github/workflows/`; текущая спецификация — в `CICD_SETUP.txt`.
+ Полный пайплайн описан в `.github/workflows/`;
 
  ### Quality gates (обязательные для merge/release)
 
@@ -234,7 +264,7 @@ npm run build
  - `values-managed.yaml` — scaffold управляемой среды (инфраструктурные имена должны быть заменены до реального go-live);
  - prod-значения используют `example.com`-домены: заменить на реальные перед внешней публикацией.
 
-| ## 🗂️ Структура репозитория
+## 🗂️ Структура репозитория
 
 ~~~text
 account-service/       аккаунты и владельцы аккаунтов
