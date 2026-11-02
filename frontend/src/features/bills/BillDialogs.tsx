@@ -24,6 +24,16 @@ interface BillDetailsDialogProps {
 export function BillDetailsDialog({ bill, onClose }: BillDetailsDialogProps) {
   const user = useAuthUser()
   const navigate = useNavigate()
+  // navigate() returns a promise in data routers; a rejection means the target
+  // route failed, so it is shown to the user instead of being dropped.
+  const toast = useToast()
+
+  const openPayments = (to: string) => {
+    onClose()
+    void Promise.resolve(navigate(to)).catch(() => {
+      toast.error('Не удалось открыть страницу платежей')
+    })
+  }
 
   if (!bill) {
     return (
@@ -47,21 +57,14 @@ export function BillDetailsDialog({ bill, onClose }: BillDetailsDialogProps) {
           </Button>
           {isStaff(user) ? (
             <Button
-              leadingIcon={<Plus className="h-4 w-4" />}
-              onClick={() => {
-                onClose()
-                navigate(`/payments?tab=topup&bill=${bill.billId}`)
-              }}
+              onClick={() => openPayments(`/payments?tab=topup&bill=${bill.billId}`)}
             >
               Пополнить
             </Button>
           ) : (
             <Button
               leadingIcon={<ArrowUpRight className="h-4 w-4" />}
-              onClick={() => {
-                onClose()
-                navigate('/payments?tab=requisites')
-              }}
+              onClick={() => openPayments('/payments?tab=requisites')}
             >
               Реквизиты
             </Button>

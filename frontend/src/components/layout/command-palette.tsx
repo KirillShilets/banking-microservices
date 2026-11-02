@@ -59,15 +59,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   // react-router resolves the navigation promise; a rejection means the target
   // route failed, so it is surfaced to the user instead of being swallowed.
-  const go = async (to: string) => {
+  // navigate() resolves after the route change; a rejection is surfaced to the
+  // user instead of being dropped.
+  const go = (to: string) => {
     setQuery('')
     onClose()
-    try {
-      await navigate(to)
-    } catch {
+    void Promise.resolve(navigate(to)).catch(() => {
       toast.error('Не удалось перейти в раздел')
-    }
-}
+    })
+  }
 
   return (
     <Modal
@@ -86,7 +86,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           onKeyDown={(event) => {
             if (event.key === 'Enter' && filtered[0]) {
               event.preventDefault()
-              void go(filtered[0].to)
+              go(filtered[0].to)
             }
           }}
           placeholder="Например, история или профиль"
@@ -105,7 +105,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              onClick={() => void go(command.to)}
+              onClick={() => go(command.to)}
               className="group flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors hover:bg-surface-soft"
             >
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-white text-ink-soft transition-colors group-hover:border-ink group-hover:bg-ink group-hover:text-lime">
