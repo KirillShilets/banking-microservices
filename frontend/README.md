@@ -308,3 +308,19 @@ Nginx раздаёт SPA с fallback на `index.html`, кэширует хэш�
 - **Sonar:** the analysis in CI passes these arguments through `-Dsonar.*` in
   `.github/workflows/ci.yml`; `sonar-project.properties` holds the same values for
   local runs of `sonar-scanner`. Keep the two in sync.
+
+### Metric of record
+
+`node ../scripts/coverage/new-code.mjs` (run from `frontend/` or with `--lcov`)
+reproduces Sonar's "coverage on new code" for the files touched by the branch:
+`(LH + BRH) / (LF + BRF)` over `git diff origin/main...HEAD`, excluding tests,
+`src/main.tsx`, `src/test/**` and `*.d.ts`. Every number in a coverage PR
+description must come from this script.
+
+- Sonar parameters have a single source: `sonar-project.properties`. CI passes
+  only `sonar.organization` and `sonar.qualitygate.wait=true`.
+- Verified with Vitest 5.0.5 (`npx vitest --version`).
+- `src/mocks/**` ships as a 391 KB lazy chunk (`browser-*.js`) that is imported
+  only when the runtime `config.js` sets `MOCK_API=true`; it is not part of the
+  default production path, but it is excluded from coverage only after an
+  explicit decision (not yet applied).
