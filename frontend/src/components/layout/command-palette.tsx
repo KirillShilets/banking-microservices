@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 import { Modal } from '../ui/modal'
+import { useToast } from '../ui/toast'
 
 interface CommandPaletteProps {
   open: boolean
@@ -54,11 +55,19 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     )
   }, [query])
 
-  const go = (to: string) => {
+  const toast = useToast()
+
+  // react-router resolves the navigation promise; a rejection means the target
+  // route failed, so it is surfaced to the user instead of being swallowed.
+  const go = async (to: string) => {
     setQuery('')
     onClose()
-    navigate(to)
-  }
+    try {
+      await navigate(to)
+    } catch {
+      toast.error('Не удалось перейти в раздел')
+    }
+}
 
   return (
     <Modal
@@ -77,7 +86,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           onKeyDown={(event) => {
             if (event.key === 'Enter' && filtered[0]) {
               event.preventDefault()
-              go(filtered[0].to)
+              void go(filtered[0].to)
             }
           }}
           placeholder="Например, история или профиль"
@@ -96,7 +105,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              onClick={() => go(command.to)}
+              onClick={() => void go(command.to)}
               className="group flex w-full items-center gap-3 rounded-2xl p-3 text-left transition-colors hover:bg-surface-soft"
             >
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-white text-ink-soft transition-colors group-hover:border-ink group-hover:bg-ink group-hover:text-lime">
