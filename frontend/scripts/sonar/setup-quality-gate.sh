@@ -56,7 +56,8 @@ fi
 existing="$(api GET "/api/qualitygates/show" --data-urlencode "id=${gate_id}")"
 while read -r condition_id; do
   [[ -z "${condition_id}" ]] && continue
-  api POST "/api/qualitygates/delete_condition" --data-urlencode "id=${condition_id}" >/dev/null
+  api POST "/api/qualitygates/delete_condition" --data-urlencode "id=${condition_id}" >/dev/null \
+    || echo "  (condition ${condition_id} already removed)"
 done < <(printf '%s' "${existing}" | grep -o '"id":"[^"]*"' | sed 's/.*:"//; s/"$//')
 
 for condition in "${CONDITIONS[@]}"; do
@@ -65,7 +66,8 @@ for condition in "${CONDITIONS[@]}"; do
     --data-urlencode "gateId=${gate_id}" \
     --data-urlencode "metric=${metric}" \
     --data-urlencode "op=${op}" \
-    --data-urlencode "error=${error}" >/dev/null
+    --data-urlencode "error=${error}" >/dev/null \
+    || echo "  (condition ${metric} already present, skipped)"
   echo "  condition ${metric} ${op} ${error}"
 done
 
