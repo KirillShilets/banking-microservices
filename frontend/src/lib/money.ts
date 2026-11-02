@@ -38,6 +38,23 @@ export function toMinorUnits(value: DecimalValue): bigint {
   return negative ? -minor : minor
 }
 
+/**
+ * Groups integer digits in threes with a non-breaking space. A loop is used
+ * instead of the classic `\B(?=(\d{3})+(?!\d))` regex, whose nested quantifiers
+ * backtrack polynomially on long inputs.
+ */
+function groupThousands(digits: string): string {
+  let grouped = ''
+
+  for (let index = 0; index < digits.length; index += 1) {
+    grouped += digits[index]
+    const remaining = digits.length - index - 1
+    if (remaining > 0 && remaining % 3 === 0) grouped += NBSP
+  }
+
+  return grouped
+}
+
 export function formatMoney(
   value: DecimalValue,
   options: {
@@ -59,9 +76,9 @@ export function formatMoney(
     return `${sign}${whole.toLocaleString('ru-RU')}${fraction ? `,${fraction}` : ''}${NBSP}млн${options.currency === false ? '' : `${NBSP}${CURRENCY_SYMBOL}`}`.trim()
   }
 
-  const whole = (absolute / MINOR_UNITS)
+  const whole = groupThousands((absolute / MINOR_UNITS).toString())
     .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, NBSP)
+
   const fraction = (absolute % MINOR_UNITS).toString().padStart(2, '0')
   const showFraction = !(options.hideZeroFraction && fraction === '00')
   const sign = minor < 0n ? '−' : options.signed && minor > 0n ? '+' : ''

@@ -87,3 +87,15 @@ describe('phone helpers', () => {
     expect(formatPhone('123')).toBe('123')
   })
 })
+
+describe('hostile input (ReDoS guard)', () => {
+  it('rejects a 50 000 character email quickly', () => {
+    const hostile = `${'a'.repeat(50_000)}@${'b'.repeat(50_000)}`
+    const startedAt = performance.now()
+    const result = validateEmail(hostile)
+    const elapsed = performance.now() - startedAt
+
+    expect(result).toEqual({ valid: false, message: 'Проверьте формат email' })
+    expect(elapsed).toBeLessThan(50)
+  })
+})

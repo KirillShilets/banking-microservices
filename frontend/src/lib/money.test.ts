@@ -100,3 +100,16 @@ describe('money aggregation', () => {
     expect(decimalToChartNumber(0)).toBe(0)
   })
 })
+
+describe('long inputs (ReDoS guard)', () => {
+  it('formats a 50 000 digit amount without backtracking', () => {
+    const digits = '9'.repeat(50_000)
+    const startedAt = performance.now()
+    const formatted = formatMoney(digits, { currency: false })
+    const elapsed = performance.now() - startedAt
+
+    expect(formatted).toContain(NBSP)
+    expect(formatted).toHaveLength(50_000 + Math.floor(49_999 / 3) + 3)
+    expect(elapsed).toBeLessThan(500)
+  })
+})

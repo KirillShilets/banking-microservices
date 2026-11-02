@@ -3,7 +3,7 @@ export interface ValidationResult {
   message?: string
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 const PHONE_PATTERN = /^\+?[0-9]{10,15}$/
 const MONEY_PATTERN = /^(?:0|[1-9]\d{0,16})(?:[.,]\d{1,2})?$/
 
@@ -18,14 +18,33 @@ export function validateName(value: string): ValidationResult {
   return { valid: true }
 }
 
+/**
+ * Validates an address by splitting on `@` instead of matching a regex with
+ * overlapping quantifiers, which backtracks polynomially on hostile input.
+ */
 export function validateEmail(value: string): ValidationResult {
   const normalized = value.trim()
   if (!normalized) {
     return { valid: false, message: 'Укажите email' }
   }
-  if (normalized.length > 127 || !EMAIL_PATTERN.test(normalized)) {
+
+  const at = normalized.indexOf('@')
+  const domain = at >= 0 ? normalized.slice(at + 1) : ''
+  const dot = domain.lastIndexOf('.')
+
+  const invalid =
+    normalized.length > 127 ||
+    at <= 0 ||
+    at !== normalized.lastIndexOf('@') ||
+    /\s/.test(normalized) ||
+    domain.length < 3 ||
+    dot <= 0 ||
+    dot === domain.length - 1
+
+  if (invalid) {
     return { valid: false, message: 'Проверьте формат email' }
   }
+
   return { valid: true }
 }
 
