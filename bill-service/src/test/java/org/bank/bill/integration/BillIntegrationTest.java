@@ -406,4 +406,38 @@ class BillIntegrationTest {
                         .content(invalidJson))
                 .andExpect(status().isBadRequest());
     }
+    @Test
+    @DisplayName("Should return 422 and keep the balance when the account has no contact email")
+    void depositBill_missingContactEmail() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
+
+        when(accountQueryGateway.getAccount(anyLong()))
+                .thenReturn(new AccountResponseDTO(
+                        OWNER_SUB,
+                        ACCOUNT_NAME,
+                        null,
+                        PHONE,
+                        DEFAULT_TIME
+                ));
+
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message")
+                        .value("Account contact email is missing"));
+
+        assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
+                .isEqualByComparingTo(AMOUNT_100);
+    }
 }

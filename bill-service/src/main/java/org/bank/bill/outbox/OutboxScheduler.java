@@ -49,6 +49,12 @@ public class OutboxScheduler {
             message.setStatus(OutboxStatus.SENT);
             message.setSentAt(OffsetDateTime.now());
             message.setErrorMessage(null);
+
+            log.debug(
+                    "Published outbox message id={} eventType={}",
+                    message.getId(),
+                    message.getEventType()
+            );
         } catch (Exception ex) {
             int retries = message.getRetryCount() + 1;
 
@@ -57,12 +63,31 @@ public class OutboxScheduler {
 
             if (isPoison(ex)) {
                 message.setStatus(OutboxStatus.FAILED);
+
+                // FAILED rows are never picked up again: without this line a
+                // deposit record could disappear with no trace anywhere.
+                log.error(
+                        "Outbox message id={} eventType={} moved to FAILED after {} attempts",
+                        message.getId(),
+                        message.getEventType(),
+                        retries,
+                        ex
+                );
             } else {
                 OffsetDateTime nextAttemptAt =
                         OffsetDateTime.now().plus(backoff(retries));
 
                 message.setStatus(OutboxStatus.PENDING);
                 message.setNextAttemptAt(nextAttemptAt);
+
+                log.warn(
+                        "Outbox message id={} eventType={} failed on attempt {}, retrying at {}: {}",
+                        message.getId(),
+                        message.getEventType(),
+                        retries,
+                        nextAttemptAt,
+                        ex.toString()
+                );
             }
         }
         outboxRepository.save(message);

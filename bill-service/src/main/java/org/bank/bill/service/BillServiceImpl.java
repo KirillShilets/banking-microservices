@@ -14,6 +14,7 @@ import org.bank.dto.response.BillResponseDTO;
 import org.bank.exception.BadRequestException;
 import org.bank.exception.ForbiddenException;
 import org.bank.exception.NotFoundException;
+import org.bank.exception.UnprocessableEntityException;
 import org.bank.security.BankRoles;
 import org.bank.security.web.AuthenticatedUser;
 import org.bank.validation.BillOpeningValidator;
@@ -159,7 +160,7 @@ public class BillServiceImpl implements BillService {
         String recipient = account.email();
 
         if (recipient == null || recipient.isBlank()) {
-            throw new IllegalStateException(
+            throw new UnprocessableEntityException(
                     "Account contact email is missing"
             );
         }
