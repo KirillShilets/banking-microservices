@@ -95,7 +95,7 @@ class BillConcurrencyTest {
                 ));
 
         billId = billRepository.save(
-                new Bill(ACCOUNT_ID, new BigDecimal("0.00"), false)
+                new Bill(ACCOUNT_ID, OWNER_SUB, new BigDecimal("0.00"), false)
         ).getBillId();
     }
 

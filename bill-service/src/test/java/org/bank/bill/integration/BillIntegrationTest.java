@@ -32,6 +32,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt; // <-- новый
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -439,5 +441,19 @@ class BillIntegrationTest {
 
         assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
                 .isEqualByComparingTo(AMOUNT_100);
+    }
+    @Test
+    @DisplayName("Bills with an owner projection are authorized without account-service")
+    void getBill_withOwnerProjection_skipsAccountService() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, OWNER_SUB, AMOUNT_100, false)
+        );
+
+        mockMvc.perform(get("/bills/{billId}", bill.getBillId())
+                        .with(customerJwt(OWNER_SUB)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.billId").value(bill.getBillId()));
+
+        verify(accountQueryGateway, never()).getAccount(anyLong());
     }
 }

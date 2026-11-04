@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
+
+    <changeSet id="008-add-bill-owner-subject" author="Kirill Shilets">
+
+        <comment>
+            Bills keep a projection of the account owner so that authorization no
+            longer needs a synchronous call to account-service, and so that call
+            can happen outside the balance transaction.
+
+            The column stays nullable: rows created before this changeset have no
+            owner to backfill from without calling account-service per row. The
+            service falls back to the remote lookup while the projection is
+            missing and always writes it for new bills.
+        </comment>
+
+        <addColumn tableName="bills">
+            <column name="owner_subject" type="VARCHAR(36)"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="bills" columnName="owner_subject"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

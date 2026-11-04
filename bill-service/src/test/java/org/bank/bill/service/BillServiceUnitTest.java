@@ -4,7 +4,6 @@ import org.bank.bill.config.DepositProperties;
 import org.bank.bill.config.SandboxProperties;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.messaging.AccountQueryGateway;
-import org.bank.bill.outbox.OutboxService;
 import org.bank.bill.repository.BillRepository;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
@@ -52,7 +51,10 @@ class BillServiceUnitTest {
     private AccountQueryGateway accountQueryGateway;
 
     @Mock
-    private OutboxService outboxService;
+    private BillOpeningExecutor billOpeningExecutor;
+
+    @Mock
+    private BillDepositExecutor billDepositExecutor;
 
     @Mock
     private AuthenticatedUser authenticatedUser;
@@ -64,7 +66,8 @@ class BillServiceUnitTest {
         billService = new BillServiceImpl(
                 billRepository,
                 accountQueryGateway,
-                outboxService,
+                billOpeningExecutor,
+                billDepositExecutor,
                 authenticatedUser,
                 new DepositProperties(MIN_DEPOSIT_LIMIT),
                 new SandboxProperties(true)
@@ -145,17 +148,8 @@ class BillServiceUnitTest {
         when(accountQueryGateway.getAccount(ACCOUNT_ID))
                 .thenReturn(account());
 
-        Bill saved = new Bill(
-                ACCOUNT_ID,
-                BigDecimal.ZERO,
-                false
-        );
-        saved.setBillId(100L);
-
-        when(billRepository.existsBillByAccountId(ACCOUNT_ID))
-                .thenReturn(false);
-        when(billRepository.save(any(Bill.class)))
-                .thenReturn(saved);
+        when(billOpeningExecutor.openBill(ACCOUNT_ID, OWNER_SUB))
+                .thenReturn(100L);
 
         Long billId = billService.createBill(
                 ACCOUNT_ID,
@@ -165,7 +159,7 @@ class BillServiceUnitTest {
 
         assertEquals(100L, billId);
 
-        verify(billRepository).save(any(Bill.class));
+        verify(billOpeningExecutor).openBill(ACCOUNT_ID, OWNER_SUB);
     }
 
     @Test
@@ -176,11 +170,24 @@ class BillServiceUnitTest {
         Bill bill = bill();
         bill.setCreationDate(OffsetDateTime.now());
 
-        when(billRepository.findByIdForUpdate(BILL_ID))
+        when(billRepository.findById(BILL_ID))
                 .thenReturn(Optional.of(bill));
 
         when(accountQueryGateway.getAccount(ACCOUNT_ID))
                 .thenReturn(account());
+
+        BillDepositResponseDTO deposited = new BillDepositResponseDTO(
+                BILL_ID,
+                ACCOUNT_ID,
+                AMOUNT_100.add(DEPOSIT_20),
+                EMAIL,
+                false,
+                false,
+                DEFAULT_TIME
+        );
+
+        when(billDepositExecutor.applyDeposit(BILL_ID, DEPOSIT_20, EMAIL))
+                .thenReturn(deposited);
 
         BillDepositResponseDTO response =
                 billService.depositBill(BILL_ID, DEPOSIT_20);
@@ -190,12 +197,7 @@ class BillServiceUnitTest {
                 response.amount()
         );
 
-        verify(outboxService, times(2)).saveEvent(
-                eq("BILL"),
-                eq(BILL_ID.toString()),
-                anyString(),
-                any()
-        );
+        verify(billDepositExecutor).applyDeposit(BILL_ID, DEPOSIT_20, EMAIL);
     }
 
     @Test
@@ -213,6 +215,6 @@ class BillServiceUnitTest {
 
         verify(billRepository, never()).findByIdForUpdate(anyLong());
         verify(billRepository, never()).save(any());
-        verifyNoInteractions(outboxService, accountQueryGateway);
+        verifyNoInteractions(billDepositExecutor, accountQueryGateway);
     }
 }

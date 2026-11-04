@@ -22,6 +22,7 @@ public class BillAccountCommandListener {
         if (command == null
                 || command.messageId() == null
                 || command.accountId() == null
+                || command.ownerSubject() == null
                 || command.bills() == null) {
             throw new AmqpRejectAndDontRequeueException(
                     "Invalid create-bills command"
@@ -34,6 +35,7 @@ public class BillAccountCommandListener {
 
         billService.createBillsForAccountInternal(
                 command.accountId(),
+                command.ownerSubject(),
                 command.bills()
         );
 

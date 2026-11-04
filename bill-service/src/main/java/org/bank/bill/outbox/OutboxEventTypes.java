@@ -6,6 +6,8 @@ package org.bank.bill.outbox;
  */
 public final class OutboxEventTypes {
 
+    public static final String AGGREGATE_BILL = "BILL";
+
     public static final String DEPOSIT_CREATED = "DEPOSIT_CREATED";
     public static final String NOTIFICATION_CREATED = "NOTIFICATION_CREATED";
 

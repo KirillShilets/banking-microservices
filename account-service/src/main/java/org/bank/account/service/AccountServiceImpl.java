@@ -85,7 +85,7 @@ public class AccountServiceImpl implements AccountService {
         Long accountId = savedAccount.getAccountId();
 
         CreateBillsCommandDTO command =
-                new CreateBillsCommandDTO(accountId, bills);
+                new CreateBillsCommandDTO(accountId, subject, bills);
 
         outboxService.saveEvent(
                 "ACCOUNT",

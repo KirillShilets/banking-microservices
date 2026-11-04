@@ -2,9 +2,7 @@ package org.bank.bill.service;
 
 import org.bank.bill.config.DepositProperties;
 import org.bank.bill.config.SandboxProperties;
-import org.bank.bill.entity.Bill;
 import org.bank.bill.messaging.AccountQueryGateway;
-import org.bank.bill.outbox.OutboxService;
 import org.bank.bill.repository.BillRepository;
 import org.bank.dto.request.CreateBillRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
@@ -14,7 +12,6 @@ import org.bank.security.web.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -24,7 +21,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -42,7 +38,10 @@ class BillFinancialProtectionTest {
     private AccountQueryGateway accountQueryGateway;
 
     @Mock
-    private OutboxService outboxService;
+    private BillOpeningExecutor billOpeningExecutor;
+
+    @Mock
+    private BillDepositExecutor billDepositExecutor;
 
     @Mock
     private AuthenticatedUser authenticatedUser;
@@ -54,7 +53,8 @@ class BillFinancialProtectionTest {
         billService = new BillServiceImpl(
                 billRepository,
                 accountQueryGateway,
-                outboxService,
+                billOpeningExecutor,
+                billDepositExecutor,
                 authenticatedUser,
                 new DepositProperties(new BigDecimal("10.00")),
                 new SandboxProperties(true)
@@ -83,15 +83,8 @@ class BillFinancialProtectionTest {
         when(authenticatedUser.subject())
                 .thenReturn(OWNER_SUBJECT);
 
-        when(billRepository.existsBillByAccountId(ACCOUNT_ID))
-                .thenReturn(false);
-
-        when(billRepository.save(any(Bill.class)))
-                .thenAnswer(invocation -> {
-                    Bill bill = invocation.getArgument(0);
-                    bill.setBillId(100L);
-                    return bill;
-                });
+        when(billOpeningExecutor.openBill(ACCOUNT_ID, OWNER_SUBJECT))
+                .thenReturn(100L);
 
         Long billId = billService.createBill(
                 ACCOUNT_ID,
@@ -99,18 +92,9 @@ class BillFinancialProtectionTest {
                 false
         );
 
-        ArgumentCaptor<Bill> captor =
-                ArgumentCaptor.forClass(Bill.class);
-
-        verify(billRepository).save(captor.capture());
-
-        Bill saved = captor.getValue();
-
         assertThat(billId).isEqualTo(100L);
-        assertThat(saved.getAccountId()).isEqualTo(ACCOUNT_ID);
-        assertThat(saved.getAmount()).isEqualByComparingTo("0.00");
-        assertThat(saved.getOverdraftEnabled()).isFalse();
-        assertThat(saved.getIsDefault()).isTrue();
+
+        verify(billOpeningExecutor).openBill(ACCOUNT_ID, OWNER_SUBJECT);
 
         verify(accountQueryGateway).getAccount(ACCOUNT_ID);
         verify(authenticatedUser).subject();
@@ -130,7 +114,8 @@ class BillFinancialProtectionTest {
         verifyNoInteractions(
                 billRepository,
                 accountQueryGateway,
-                outboxService
+                billOpeningExecutor,
+                billDepositExecutor
         );
     }
 
@@ -145,7 +130,7 @@ class BillFinancialProtectionTest {
                 )
         );
 
-        verifyNoInteractions(billRepository, outboxService);
+        verifyNoInteractions(billRepository, billOpeningExecutor, billDepositExecutor);
     }
 
     @Test
@@ -159,7 +144,7 @@ class BillFinancialProtectionTest {
                 )
         );
 
-        verifyNoInteractions(billRepository, outboxService);
+        verifyNoInteractions(billRepository, billOpeningExecutor, billDepositExecutor);
     }
 
     @Test
@@ -177,7 +162,7 @@ class BillFinancialProtectionTest {
                 )
         );
 
-        verifyNoInteractions(billRepository, outboxService);
+        verifyNoInteractions(billRepository, billOpeningExecutor, billDepositExecutor);
     }
 
     @Test
@@ -190,11 +175,12 @@ class BillFinancialProtectionTest {
                 BadRequestException.class,
                 () -> billService.createBillsForAccountInternal(
                         ACCOUNT_ID,
+                        OWNER_SUBJECT,
                         requests
                 )
         );
 
-        verifyNoInteractions(billRepository, outboxService);
+        verifyNoInteractions(billRepository, billOpeningExecutor, billDepositExecutor);
     }
 
     @Test
@@ -207,11 +193,12 @@ class BillFinancialProtectionTest {
                 BadRequestException.class,
                 () -> billService.createBillsForAccountInternal(
                         ACCOUNT_ID,
+                        OWNER_SUBJECT,
                         requests
                 )
         );
 
-        verifyNoInteractions(billRepository, outboxService);
+        verifyNoInteractions(billRepository, billOpeningExecutor, billDepositExecutor);
     }
 
     @Test
@@ -220,10 +207,11 @@ class BillFinancialProtectionTest {
                 BadRequestException.class,
                 () -> billService.createBillsForAccountInternal(
                         ACCOUNT_ID,
+                        OWNER_SUBJECT,
                         List.of()
                 )
         );
 
-        verifyNoInteractions(billRepository, outboxService);
+        verifyNoInteractions(billRepository, billOpeningExecutor, billDepositExecutor);
     }
 }
