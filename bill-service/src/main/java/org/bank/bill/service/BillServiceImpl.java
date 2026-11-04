@@ -4,6 +4,7 @@ import org.bank.bill.config.DepositProperties;
 import org.bank.bill.config.SandboxProperties;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.messaging.AccountQueryGateway;
+import org.bank.bill.outbox.OutboxEventTypes;
 import org.bank.bill.outbox.OutboxService;
 import org.bank.bill.repository.BillRepository;
 import org.bank.dto.request.CreateBillRequestDTO;
@@ -178,7 +179,7 @@ public class BillServiceImpl implements BillService {
         outboxService.saveEvent(
                 "BILL",
                 billId.toString(),
-                "DEPOSIT_CREATED",
+                OutboxEventTypes.DEPOSIT_CREATED,
                 new DepositRequestDTO(
                         billId,
                         normalizedAmount,
@@ -190,7 +191,7 @@ public class BillServiceImpl implements BillService {
         outboxService.saveEvent(
                 "BILL",
                 billId.toString(),
-                "NOTIFICATION_CREATED",
+                OutboxEventTypes.NOTIFICATION_CREATED,
                 new DepositRequestDTO(
                         billId,
                         normalizedAmount,

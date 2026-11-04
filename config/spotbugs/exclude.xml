@@ -10,10 +10,9 @@
      container and is thread-safe by contract; defensive copies would be
      wrong (new mapper per bean) and hides the shared, immutable-after-init
      nature of these beans. The field is final and never re-assigned.
-   * CT_CONSTRUCTOR_THROW — fail-fast validation of @Value configuration in
-     constructors (positive monetary amount, positive AMQP confirmation
-     timeout). Throwing at DI time is deliberate: the application must not
-     start with invalid configuration.
+   * CT_CONSTRUCTOR_THROW — fail-fast validation of configuration in
+     constructors (positive AMQP confirmation timeout). Throwing at DI time is
+     deliberate: the application must not start with invalid configuration.
    * VA_FORMAT_STRING_USES_NEWLINE — integration-test JSON payloads are built
      with Java text blocks (.formatted(...)); literal newlines are the
      intended formatting of the payload, not a platform-portability issue.
@@ -36,7 +35,19 @@
     </Match>
     <Match>
         <Bug pattern="EI_EXPOSE_REP2"/>
-        <Class name="org.bank.bill.outbox.OutboxScheduler"/>
+        <Class name="org.bank.bill.outbox.OutboxClaimer"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.bill.outbox.OutboxRelay"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.bill.outbox.OutboxRetention"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.bill.outbox.OutboxStatusWriter"/>
     </Match>
     <Match>
         <Bug pattern="EI_EXPOSE_REP2"/>
@@ -50,10 +61,7 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
         <Class name="org.bank.gateway.exception.GlobalWebFluxExceptionHandler"/>
     </Match>
-    <Match>
-        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
-        <Class name="org.bank.bill.service.BillServiceImpl"/>
-    </Match>
+
     <Match>
         <Bug pattern="CT_CONSTRUCTOR_THROW"/>
         <Class name="org.bank.messaging.RabbitCommandPublisher"/>
