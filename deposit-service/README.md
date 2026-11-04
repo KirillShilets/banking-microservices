@@ -26,7 +26,7 @@
 - база: deposit_service_database;
 - очередь: bank.deposit.save.queue;
 - routing key: deposit.save;
-- discovery: Eureka — только для локального запуска; в Kubernetes отключена.
+- discovery: сервис адресуется по Kubernetes DNS; Eureka в платформе не используется.
 
 ## 🧪 Тесты
 

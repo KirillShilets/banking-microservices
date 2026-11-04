@@ -101,8 +101,8 @@ subprojects {
             // Spring Boot 3.5.x BOM pins FreeMarker 2.3.34, which is vulnerable
             // to path traversal (GHSA-27j2-h3m2-8237 / CVE-2026-84939).
             dependency 'org.freemarker:freemarker:2.3.35'
-            // Bouncy Castle 1.80.2, pulled in transitively by
-            // spring-cloud-netflix-eureka-client, is vulnerable to:
+            // Bouncy Castle 1.80.2 (previously pulled in by the retired
+            // Eureka client) is vulnerable to:
             //   GHSA-9pwp-9qqc-pr26 (name constraints bypass, critical),
             //   GHSA-qp49-qgx5-5m26 (lazy ASN.1 nesting-depth guard reset),
             //   GHSA-c3fc-8qff-9hwx (LDAP injection).
@@ -114,8 +114,8 @@ subprojects {
             dependency 'org.postgresql:postgresql:42.7.14'
             // GHSA-v3jc-474w-2wm6 (HPackDecoder unlimited header list size
             // before SETTINGS ACK) affects httpcore5(-h2) < 5.4.3; the
-            // transitive 5.3.6 comes from httpclient5 via Spring Cloud
-            // config/eureka clients. Pin the 5.4.x line.
+            // transitive 5.3.6 comes from httpclient5 via the Spring Cloud
+            // Config client. Pin the 5.4.x line.
             dependency 'org.apache.httpcomponents.core5:httpcore5:5.4.4'
             dependency 'org.apache.httpcomponents.core5:httpcore5-h2:5.4.4'
             // httpclient5 5.5.2 pins the vulnerable httpcore5 5.3.6 in its
@@ -131,9 +131,9 @@ subprojects {
             // GHSA-5xwg-cfvj-gff5). The deepest fix in the series is
             // 5.36.1; pin the latest 5.37.0 release.
             dependency 'com.rabbitmq:amqp-client:5.37.0'
-            // eureka-client 2.0.6 pulls Apache HttpClient 4.5.3, which is
-            // vulnerable to GHSA-7r82-7xv7-xcpj (XSS in request URI handling,
-            // fixed in 4.5.13). Pin the last 4.5.x release.
+            // Apache HttpClient 4.5.3 (previously pulled in by the retired
+            // Eureka client) is vulnerable to GHSA-7r82-7xv7-xcpj (XSS in
+            // request URI handling, fixed in 4.5.13). Pin the last 4.5.x release.
             dependency 'org.apache.httpcomponents:httpclient:4.5.14'
             // commons-lang3 3.17.0 is vulnerable to GHSA-j288-q9x7-2f5v
             // (Uncontrolled Recursion, fixed in 3.18.0).
@@ -272,8 +272,8 @@ subprojects {
     }
 
     // Coverage gate ONLY for services that are deployed and have tests.
-    // config-service and discovery-service do not deploy and have no meaningful
-    // test coverage — the gate would fail those modules.
+    // config-service does not deploy (its files are mirrored into the Helm
+    // ConfigMap) — the gate would fail that module.
     if (name in ['account-service', 'bill-service', 'deposit-service', 'notification-service', 'gateway-service']) {
         tasks.named('jacocoTestCoverageVerification') {
             dependsOn tasks.named('test'), integrationTest

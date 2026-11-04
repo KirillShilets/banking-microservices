@@ -1,5 +1,7 @@
 package org.bank.bill.service;
 
+import org.bank.bill.config.DepositProperties;
+import org.bank.bill.config.SandboxProperties;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.messaging.AccountQueryGateway;
 import org.bank.bill.outbox.OutboxService;
@@ -16,7 +18,6 @@ import org.bank.security.BankRoles;
 import org.bank.security.web.AuthenticatedUser;
 import org.bank.validation.BillOpeningValidator;
 import org.bank.validation.MoneyValidation;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,35 +34,23 @@ public class BillServiceImpl implements BillService {
     private final OutboxService outboxService;
     private final AuthenticatedUser authenticatedUser;
 
-    private final BigDecimal minDepositAmount;
-    private final boolean sandboxDepositsEnabled;
+    private final DepositProperties depositProperties;
+    private final SandboxProperties sandboxProperties;
 
     public BillServiceImpl(
             BillRepository billRepository,
             AccountQueryGateway accountQueryGateway,
             OutboxService outboxService,
             AuthenticatedUser authenticatedUser,
-            @Value("${app.deposit.min-amount:10.00}")
-            BigDecimal minDepositAmount,
-            @Value("${app.sandbox.deposits-enabled:false}")
-            boolean sandboxDepositsEnabled
+            DepositProperties depositProperties,
+            SandboxProperties sandboxProperties
     ) {
         this.billRepository = billRepository;
         this.accountQueryGateway = accountQueryGateway;
         this.outboxService = outboxService;
         this.authenticatedUser = authenticatedUser;
-
-        try {
-            this.minDepositAmount =
-                    MoneyValidation.positiveAmount(minDepositAmount);
-        } catch (BadRequestException exception) {
-            throw new IllegalArgumentException(
-                    "app.deposit.min-amount must be a valid positive monetary amount",
-                    exception
-            );
-        }
-
-        this.sandboxDepositsEnabled = sandboxDepositsEnabled;
+        this.depositProperties = depositProperties;
+        this.sandboxProperties = sandboxProperties;
     }
 
     @Override
@@ -151,6 +140,8 @@ public class BillServiceImpl implements BillService {
         BigDecimal normalizedAmount =
                 MoneyValidation.positiveAmount(amount);
 
+        BigDecimal minDepositAmount = depositProperties.minAmount();
+
         if (normalizedAmount.compareTo(minDepositAmount) < 0) {
             throw new BadRequestException(
                     "Deposit amount is less than minimum: "
@@ -219,7 +210,7 @@ public class BillServiceImpl implements BillService {
     }
 
     private void assertSandboxDepositAllowed() {
-        if (!sandboxDepositsEnabled) {
+        if (!sandboxProperties.depositsEnabled()) {
             throw new ForbiddenException(
                     "Sandbox deposits are disabled"
             );

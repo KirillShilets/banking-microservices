@@ -273,7 +273,6 @@ deposit-service/       история депозитов
 notification-service/  email-уведомления
 gateway-service/       внешний API Gateway
 config-service/        исходные конфигурации; для Kubernetes используется ConfigMap
-discovery-service/     исходный модуль Eureka; отключен в Kubernetes
 security-lib/          общая JWT-конфигурация и роли
 common-lib/            DTO, исключения и RabbitMQ topology
 common-test-lib/       общая тестовая инфраструктура

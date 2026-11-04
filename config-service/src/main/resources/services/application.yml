@@ -1,11 +1,3 @@
-eureka:
-  instance:
-    prefer-ip-address: true
-  client:
-    service-url:
-      defaultZone: http://discovery-service:8761/eureka/
-    registry-fetch-interval-seconds: 10
-
 spring:
   # In Kubernetes, migrations run only via the Helm pre-upgrade/pre-install Job
   # (templates/migration-job.yaml) with the "migrate" profile. App pods must never

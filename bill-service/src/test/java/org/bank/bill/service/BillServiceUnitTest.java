@@ -1,5 +1,7 @@
 package org.bank.bill.service;
 
+import org.bank.bill.config.DepositProperties;
+import org.bank.bill.config.SandboxProperties;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.messaging.AccountQueryGateway;
 import org.bank.bill.outbox.OutboxService;
@@ -64,8 +66,8 @@ class BillServiceUnitTest {
                 accountQueryGateway,
                 outboxService,
                 authenticatedUser,
-                MIN_DEPOSIT_LIMIT,
-                true
+                new DepositProperties(MIN_DEPOSIT_LIMIT),
+                new SandboxProperties(true)
         );
     }
 

@@ -1,5 +1,7 @@
 package org.bank.bill.service;
 
+import org.bank.bill.config.DepositProperties;
+import org.bank.bill.config.SandboxProperties;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.messaging.AccountQueryGateway;
 import org.bank.bill.outbox.OutboxService;
@@ -52,8 +54,8 @@ class SandboxDepositProtectionTest {
                 accountGateway,
                 outbox,
                 user,
-                new BigDecimal("10.00"),
-                true
+                new DepositProperties(new BigDecimal("10.00")),
+                new SandboxProperties(true)
         );
     }
 
@@ -71,8 +73,8 @@ class SandboxDepositProtectionTest {
                 accountGateway,
                 outbox,
                 user,
-                new BigDecimal("10.00"),
-                false
+                new DepositProperties(new BigDecimal("10.00")),
+                new SandboxProperties(false)
         );
 
         assertThrows(
