@@ -4,9 +4,10 @@ import { bootstrapAuth } from '../auth/bootstrap'
 export async function startApplication(): Promise<
   Awaited<ReturnType<typeof bootstrapAuth>>
 > {
-  // Loaded lazily so MSW and its handlers never reach the production runtime
-  // when mock mode is disabled.
-  if (appConfig.mockApi) {
+  // The DEV constant must be part of this guard: it is the only condition the
+  // bundler can evaluate statically, so a production build drops the branch (and
+  // with it the MSW chunk) instead of shipping the mock backend disabled.
+  if (import.meta.env.DEV && appConfig.mockApi) {
     const { enableMocking } = await import('../mocks/browser')
     await enableMocking()
   }
