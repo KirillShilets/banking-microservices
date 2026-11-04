@@ -27,6 +27,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -118,7 +119,7 @@ class BillConcurrencyTest {
                 authenticateAsAdmin();
                 startGate.await();
                 try {
-                    billService.depositBill(billId, DEPOSIT_AMOUNT);
+                    billService.depositBill(UUID.randomUUID().toString(), billId, DEPOSIT_AMOUNT);
                 } finally {
                     SecurityContextHolder.clearContext();
                 }

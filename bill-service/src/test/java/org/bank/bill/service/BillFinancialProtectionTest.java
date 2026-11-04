@@ -15,6 +15,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bank.bill.idempotency.IdempotencyGuard;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -44,6 +46,9 @@ class BillFinancialProtectionTest {
     private BillDepositExecutor billDepositExecutor;
 
     @Mock
+    private IdempotencyGuard idempotencyGuard;
+
+    @Mock
     private AuthenticatedUser authenticatedUser;
 
     private BillServiceImpl billService;
@@ -55,6 +60,8 @@ class BillFinancialProtectionTest {
                 accountQueryGateway,
                 billOpeningExecutor,
                 billDepositExecutor,
+                idempotencyGuard,
+                new ObjectMapper().findAndRegisterModules(),
                 authenticatedUser,
                 new DepositProperties(new BigDecimal("10.00")),
                 new SandboxProperties(true)

@@ -20,6 +20,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bank.bill.idempotency.IdempotencyClaim;
+import org.bank.bill.idempotency.IdempotencyGuard;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -43,6 +46,7 @@ class BillServiceUnitTest {
     private static final String PHONE = "+375444243564";
     private static final String OWNER_SUB = "11111111-1111-1111-1111-111111111111";
     private static final String OTHER_SUB = "22222222-2222-2222-2222-222222222222";
+    private static final String IDEMPOTENCY_KEY = "deposit-key-1";
 
     @Mock
     private BillRepository billRepository;
@@ -57,6 +61,9 @@ class BillServiceUnitTest {
     private BillDepositExecutor billDepositExecutor;
 
     @Mock
+    private IdempotencyGuard idempotencyGuard;
+
+    @Mock
     private AuthenticatedUser authenticatedUser;
 
     private BillServiceImpl billService;
@@ -68,6 +75,8 @@ class BillServiceUnitTest {
                 accountQueryGateway,
                 billOpeningExecutor,
                 billDepositExecutor,
+                idempotencyGuard,
+                new ObjectMapper().findAndRegisterModules(),
                 authenticatedUser,
                 new DepositProperties(MIN_DEPOSIT_LIMIT),
                 new SandboxProperties(true)
@@ -186,18 +195,21 @@ class BillServiceUnitTest {
                 DEFAULT_TIME
         );
 
-        when(billDepositExecutor.applyDeposit(BILL_ID, DEPOSIT_20, EMAIL))
+        when(idempotencyGuard.claim(anyString(), anyString()))
+                .thenReturn(IdempotencyClaim.claimed());
+        when(billDepositExecutor.applyDeposit(anyString(), eq(BILL_ID), eq(DEPOSIT_20), eq(EMAIL)))
                 .thenReturn(deposited);
 
         BillDepositResponseDTO response =
-                billService.depositBill(BILL_ID, DEPOSIT_20);
+                billService.depositBill(IDEMPOTENCY_KEY, BILL_ID, DEPOSIT_20);
 
         assertEquals(
                 AMOUNT_100.add(DEPOSIT_20),
                 response.amount()
         );
 
-        verify(billDepositExecutor).applyDeposit(BILL_ID, DEPOSIT_20, EMAIL);
+        verify(billDepositExecutor)
+                .applyDeposit(IDEMPOTENCY_KEY, BILL_ID, DEPOSIT_20, EMAIL);
     }
 
     @Test
@@ -208,6 +220,7 @@ class BillServiceUnitTest {
         assertThrows(
                 BadRequestException.class,
                 () -> billService.depositBill(
+                        IDEMPOTENCY_KEY,
                         BILL_ID,
                         WRONG_DEPOSIT
                 )

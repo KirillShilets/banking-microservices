@@ -13,6 +13,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -86,6 +87,18 @@ public class GlobalExceptionHandler {
         log.warn("Type mismatch for parameter: {}", ex.getName());
         ErrorResponseDTO response = new ErrorResponseDTO(
                 "Invalid parameter format for: " + ex.getName(),
+                HttpStatus.BAD_REQUEST.value(),
+                LocalDateTime.now()
+        );
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ErrorResponseDTO> handleMissingHeader(MissingRequestHeaderException ex) {
+        log.warn("Missing request header: {}", ex.getHeaderName());
+        ErrorResponseDTO response = new ErrorResponseDTO(
+                "Required header is missing: " + ex.getHeaderName(),
                 HttpStatus.BAD_REQUEST.value(),
                 LocalDateTime.now()
         );

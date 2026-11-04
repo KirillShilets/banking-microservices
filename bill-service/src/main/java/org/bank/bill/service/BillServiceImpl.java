@@ -2,13 +2,18 @@ package org.bank.bill.service;
 
 import org.bank.bill.config.DepositProperties;
 import org.bank.bill.config.SandboxProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bank.bill.entity.Bill;
+import org.bank.bill.idempotency.IdempotencyClaim;
+import org.bank.bill.idempotency.IdempotencyGuard;
 import org.bank.bill.messaging.AccountQueryGateway;
 import org.bank.bill.repository.BillRepository;
 import org.bank.dto.request.CreateBillRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
+import org.bank.exception.AlreadyExistsException;
 import org.bank.exception.BadRequestException;
 import org.bank.exception.ForbiddenException;
 import org.bank.exception.NotFoundException;
@@ -20,6 +25,10 @@ import org.bank.validation.MoneyValidation;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 
 /**
@@ -35,10 +44,14 @@ import java.util.List;
 @Service
 public class BillServiceImpl implements BillService {
 
+    private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+
     private final BillRepository billRepository;
     private final AccountQueryGateway accountQueryGateway;
     private final BillOpeningExecutor billOpeningExecutor;
     private final BillDepositExecutor billDepositExecutor;
+    private final IdempotencyGuard idempotencyGuard;
+    private final ObjectMapper objectMapper;
     private final AuthenticatedUser authenticatedUser;
     private final DepositProperties depositProperties;
     private final SandboxProperties sandboxProperties;
@@ -48,6 +61,8 @@ public class BillServiceImpl implements BillService {
             AccountQueryGateway accountQueryGateway,
             BillOpeningExecutor billOpeningExecutor,
             BillDepositExecutor billDepositExecutor,
+            IdempotencyGuard idempotencyGuard,
+            ObjectMapper objectMapper,
             AuthenticatedUser authenticatedUser,
             DepositProperties depositProperties,
             SandboxProperties sandboxProperties
@@ -56,6 +71,8 @@ public class BillServiceImpl implements BillService {
         this.accountQueryGateway = accountQueryGateway;
         this.billOpeningExecutor = billOpeningExecutor;
         this.billDepositExecutor = billDepositExecutor;
+        this.idempotencyGuard = idempotencyGuard;
+        this.objectMapper = objectMapper;
         this.authenticatedUser = authenticatedUser;
         this.depositProperties = depositProperties;
         this.sandboxProperties = sandboxProperties;
@@ -125,10 +142,19 @@ public class BillServiceImpl implements BillService {
 
     @Override
     public BillDepositResponseDTO depositBill(
+            String idempotencyKey,
             Long billId,
             BigDecimal amount
     ) {
         assertSandboxDepositAllowed();
+
+        if (idempotencyKey == null || idempotencyKey.isBlank()
+                || idempotencyKey.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
+            throw new BadRequestException(
+                    "Idempotency-Key must be provided and at most "
+                            + MAX_IDEMPOTENCY_KEY_LENGTH + " characters"
+            );
+        }
 
         if (billId == null || billId <= 0) {
             throw new BadRequestException("Bill id must be positive");
@@ -147,11 +173,66 @@ public class BillServiceImpl implements BillService {
         Bill bill = getBillById(billId);
         String recipient = authorizeAndResolveRecipient(bill);
 
-        return billDepositExecutor.applyDeposit(
-                billId,
-                normalizedAmount,
-                recipient
+        IdempotencyClaim claim = idempotencyGuard.claim(
+                idempotencyKey,
+                requestHash(billId, normalizedAmount)
         );
+
+        if (claim.outcome() == IdempotencyClaim.Outcome.REPLAY) {
+            return replay(claim.responseBody());
+        }
+
+        if (claim.outcome() == IdempotencyClaim.Outcome.CONFLICT) {
+            throw new UnprocessableEntityException(
+                    "Idempotency-Key was already used for a different request"
+            );
+        }
+
+        if (claim.outcome() == IdempotencyClaim.Outcome.IN_PROGRESS) {
+            throw new AlreadyExistsException(
+                    "A deposit with this Idempotency-Key is already in progress"
+            );
+        }
+
+        try {
+            return billDepositExecutor.applyDeposit(
+                    idempotencyKey,
+                    billId,
+                    normalizedAmount,
+                    recipient
+            );
+        } catch (RuntimeException exception) {
+            // Let the client retry instead of waiting for the claim to go stale.
+            idempotencyGuard.release(idempotencyKey);
+            throw exception;
+        }
+    }
+
+    private BillDepositResponseDTO replay(String responseBody) {
+        try {
+            return objectMapper.readValue(
+                    responseBody,
+                    BillDepositResponseDTO.class
+            );
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException(
+                    "Cannot read the stored idempotent response",
+                    exception
+            );
+        }
+    }
+
+    private static String requestHash(Long billId, BigDecimal amount) {
+        String canonicalRequest = billId + "|" + amount.toPlainString();
+
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(canonicalRequest.getBytes(StandardCharsets.UTF_8));
+
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
     }
 
     private void assertSandboxDepositAllowed() {

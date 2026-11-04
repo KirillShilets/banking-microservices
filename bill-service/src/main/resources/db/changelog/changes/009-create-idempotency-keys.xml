@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
+
+    <changeSet id="009-create-idempotency-keys" author="Kirill Shilets">
+
+        <comment>
+            Sandbox deposits are money movements triggered by an HTTP request, so
+            a client retry must not credit the balance twice. The key is claimed
+            with INSERT ... ON CONFLICT DO NOTHING, which is atomic in READ
+            COMMITTED, and the stored response is replayed for repeats.
+        </comment>
+
+        <createTable tableName="idempotency_keys">
+            <column name="idempotency_key" type="VARCHAR(128)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="request_hash" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="response_body" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_at" type="TIMESTAMP WITH TIME ZONE"/>
+        </createTable>
+
+        <createIndex
+                indexName="idx_idempotency_keys_created_at"
+                tableName="idempotency_keys">
+            <column name="created_at"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="idempotency_keys"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

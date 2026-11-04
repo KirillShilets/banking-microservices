@@ -24,3 +24,11 @@ spring:
 app:
   deposit:
     min-amount: 2.60
+  # Keep the background relay and the retention job out of the test window:
+  # their first run happens at startup, before any test writes a row.
+  outbox:
+    scheduler:
+      fixed-delay: 3600000
+    cleanup:
+      fixed-delay: 3600000
+      initial-delay: 3600000

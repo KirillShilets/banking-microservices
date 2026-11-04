@@ -2,6 +2,7 @@ package org.bank.bill.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bank.bill.entity.Bill;
+import org.bank.bill.idempotency.IdempotencyKeyRepository;
 import org.bank.bill.messaging.AccountQueryGateway;
 import org.bank.bill.messaging.DepositCommandGateway;
 import org.bank.bill.messaging.NotificationCommandGateway;
@@ -68,6 +69,9 @@ class BillIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private IdempotencyKeyRepository idempotencyKeyRepository;
+
     @MockitoBean
     private AccountQueryGateway accountQueryGateway;
 
@@ -88,6 +92,7 @@ class BillIntegrationTest {
 
     @AfterEach
     void clear() {
+        idempotencyKeyRepository.deleteAll();
         billRepository.deleteAll();
     }
 
@@ -217,7 +222,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -275,7 +280,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -329,7 +334,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -359,7 +364,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -385,7 +390,7 @@ class BillIntegrationTest {
             }
             """.formatted(NON_EXISTENT_ID);
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -431,7 +436,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -455,5 +460,103 @@ class BillIntegrationTest {
                 .andExpect(jsonPath("$.billId").value(bill.getBillId()));
 
         verify(accountQueryGateway, never()).getAccount(anyLong());
+    }
+    @Test
+    @DisplayName("Repeating a deposit with the same Idempotency-Key credits the balance once")
+    void depositBill_repeatedKey_creditsOnceAndReplaysResponse() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, OWNER_SUB, AMOUNT_100, false)
+        );
+
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        String firstResponse = mockMvc.perform(post("/bills/sandbox/deposits")
+                        .header("Idempotency-Key", "repeat-key-1")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").value(110.00))
+                .andReturn().getResponse().getContentAsString();
+
+        String secondResponse = mockMvc.perform(post("/bills/sandbox/deposits")
+                        .header("Idempotency-Key", "repeat-key-1")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(secondResponse).isEqualTo(firstResponse);
+        assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
+                .isEqualByComparingTo("110.00");
+    }
+
+    @Test
+    @DisplayName("Reusing an Idempotency-Key for a different amount is rejected")
+    void depositBill_reusedKeyWithDifferentAmount_isRejected() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, OWNER_SUB, AMOUNT_100, false)
+        );
+
+        String firstJson = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        String otherJson = """
+            {
+                "billId": %d,
+                "amount": "20.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .header("Idempotency-Key", "repeat-key-2")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(firstJson))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .header("Idempotency-Key", "repeat-key-2")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(otherJson))
+                .andExpect(status().isUnprocessableEntity());
+
+        assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
+                .isEqualByComparingTo("110.00");
+    }
+
+    @Test
+    @DisplayName("A deposit without an Idempotency-Key is rejected")
+    void depositBill_missingIdempotencyKey_isRejected() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, OWNER_SUB, AMOUNT_100, false)
+        );
+
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest());
+
+        assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
+                .isEqualByComparingTo(AMOUNT_100);
     }
 }

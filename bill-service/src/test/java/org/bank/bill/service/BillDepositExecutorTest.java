@@ -13,6 +13,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bank.bill.idempotency.IdempotencyKeyRepository;
 import java.math.BigDecimal;
 import java.util.Optional;
 
@@ -29,6 +31,7 @@ class BillDepositExecutorTest {
     private static final Long ACCOUNT_ID = 10L;
     private static final String OWNER_SUBJECT = "owner-subject";
     private static final String EMAIL = "customer@example.test";
+    private static final String IDEMPOTENCY_KEY = "deposit-key-1";
 
     @Mock
     private BillRepository billRepository;
@@ -36,11 +39,19 @@ class BillDepositExecutorTest {
     @Mock
     private OutboxService outboxService;
 
+    @Mock
+    private IdempotencyKeyRepository idempotencyKeyRepository;
+
     private BillDepositExecutor executor;
 
     @BeforeEach
     void setUp() {
-        executor = new BillDepositExecutor(billRepository, outboxService);
+        executor = new BillDepositExecutor(
+                billRepository,
+                outboxService,
+                idempotencyKeyRepository,
+                new ObjectMapper().findAndRegisterModules()
+        );
     }
 
     @Test
@@ -55,6 +66,7 @@ class BillDepositExecutorTest {
         when(billRepository.findByIdForUpdate(BILL_ID)).thenReturn(Optional.of(bill));
 
         BillDepositResponseDTO response = executor.applyDeposit(
+                IDEMPOTENCY_KEY,
                 BILL_ID,
                 new BigDecimal("10.00"),
                 EMAIL
@@ -88,6 +100,7 @@ class BillDepositExecutorTest {
         when(billRepository.findByIdForUpdate(BILL_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> executor.applyDeposit(
+                IDEMPOTENCY_KEY,
                 BILL_ID,
                 new BigDecimal("10.00"),
                 EMAIL

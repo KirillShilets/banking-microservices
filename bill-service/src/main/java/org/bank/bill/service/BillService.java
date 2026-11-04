@@ -33,6 +33,7 @@ public interface BillService {
     );
 
     BillDepositResponseDTO depositBill(
+            String idempotencyKey,
             Long billId,
             BigDecimal amount
     );

@@ -17,6 +17,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bank.bill.idempotency.IdempotencyClaim;
+import org.bank.bill.idempotency.IdempotencyGuard;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -41,6 +44,9 @@ class SandboxDepositProtectionTest {
     private BillDepositExecutor depositExecutor;
 
     @Mock
+    private IdempotencyGuard idempotencyGuard;
+
+    @Mock
     private AuthenticatedUser user;
 
     private BillServiceImpl service;
@@ -52,6 +58,8 @@ class SandboxDepositProtectionTest {
                 accountGateway,
                 openingExecutor,
                 depositExecutor,
+                idempotencyGuard,
+                new ObjectMapper().findAndRegisterModules(),
                 user,
                 new DepositProperties(new BigDecimal("10.00")),
                 new SandboxProperties(true)
@@ -72,6 +80,8 @@ class SandboxDepositProtectionTest {
                 accountGateway,
                 openingExecutor,
                 depositExecutor,
+                idempotencyGuard,
+                new ObjectMapper().findAndRegisterModules(),
                 user,
                 new DepositProperties(new BigDecimal("10.00")),
                 new SandboxProperties(false)
@@ -79,7 +89,7 @@ class SandboxDepositProtectionTest {
 
         assertThrows(
                 ForbiddenException.class,
-                () -> disabled.depositBill(1L, new BigDecimal("10.00"))
+                () -> disabled.depositBill("deposit-key", 1L, new BigDecimal("10.00"))
         );
 
         verifyNoInteractions(repository, accountGateway, depositExecutor, user);
@@ -91,7 +101,7 @@ class SandboxDepositProtectionTest {
 
         assertThrows(
                 ForbiddenException.class,
-                () -> service.depositBill(1L, new BigDecimal("10.00"))
+                () -> service.depositBill("deposit-key", 1L, new BigDecimal("10.00"))
         );
 
         verifyNoInteractions(repository, accountGateway, depositExecutor);
@@ -103,7 +113,7 @@ class SandboxDepositProtectionTest {
 
         assertThrows(
                 BadRequestException.class,
-                () -> service.depositBill(1L, new BigDecimal("10.005"))
+                () -> service.depositBill("deposit-key", 1L, new BigDecimal("10.005"))
         );
 
         verifyNoInteractions(repository, accountGateway, depositExecutor);
@@ -115,7 +125,7 @@ class SandboxDepositProtectionTest {
 
         assertThrows(
                 BadRequestException.class,
-                () -> service.depositBill(1L, new BigDecimal("-10.00"))
+                () -> service.depositBill("deposit-key", 1L, new BigDecimal("-10.00"))
         );
 
         verifyNoInteractions(repository, accountGateway, depositExecutor);
@@ -150,15 +160,19 @@ class SandboxDepositProtectionTest {
                 OffsetDateTime.parse("2025-12-12T12:00:00Z")
         );
 
+        when(idempotencyGuard.claim(anyString(), anyString()))
+                .thenReturn(IdempotencyClaim.claimed());
         when(depositExecutor.applyDeposit(
+                "deposit-key",
                 1L,
                 new BigDecimal("10.00"),
                 "verified-profile@example.test"
         )).thenReturn(deposited);
 
-        service.depositBill(1L, new BigDecimal("10.00"));
+        service.depositBill("deposit-key", 1L, new BigDecimal("10.00"));
 
         verify(depositExecutor).applyDeposit(
+                "deposit-key",
                 1L,
                 new BigDecimal("10.00"),
                 "verified-profile@example.test"

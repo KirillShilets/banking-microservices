@@ -51,6 +51,14 @@
     </Match>
     <Match>
         <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.bill.service.BillDepositExecutor"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Class name="org.bank.bill.service.BillServiceImpl"/>
+    </Match>
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
         <Class name="org.bank.bill.outbox.OutboxService"/>
     </Match>
     <Match>
