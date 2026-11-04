@@ -9,6 +9,7 @@ import org.bank.bill.repository.BillRepository;
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.dto.request.BillRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @EnablePostgresTestConfiguration
 @SpringBootTest(properties = "app.sandbox.deposits-enabled=true")
+@Tag("integration")
 class BillIntegrationTest {
 
     private static final Long ACCOUNT_ID = 10L;

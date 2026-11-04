@@ -54,14 +54,6 @@ ext['tomcat.version'] = '10.1.59'
 // Both are fixed in 4.1.137.Final.
 ext['netty.version'] = '4.1.137.Final'
 
-def integrationTestPatterns = [
-    '**/*IntegrationTest',
-    '**/*RepositoryUnitTest',
-    '**/ConfigApplicationTests',
-    '**/DiscoveryApplicationTests',
-    '**/GatewayApplicationTests'
-]
-
 subprojects {
     apply plugin: 'java'
     apply plugin: 'io.spring.dependency-management'
@@ -160,23 +152,28 @@ subprojects {
         }
     }
 
+    // Unit and integration suites are separated by JUnit tags, not by class-name
+    // patterns. Gradle matches filter patterns against the fully qualified class
+    // name, so patterns like '**/*IntegrationTest' matched nothing: both suites
+    // ran inside 'test' and 'integrationTest' silently selected zero tests.
+    def hasTaggedIntegrationTests = {
+        def testSources = file('src/test/java')
+        testSources.exists()
+                && fileTree(testSources) { include '**/*.java' }.files
+                .any { it.getText('UTF-8').contains('@Tag("integration")') }
+    }
+
     tasks.withType(Test).configureEach {
         useJUnitPlatform()
         testLogging {
             events 'failed', 'skipped'
             exceptionFormat 'full'
         }
-        filter {
-            // Modules without integration test classes must not fail the build.
-            failOnNoMatchingTests = false
-        }
     }
 
     tasks.named('test') {
-        filter {
-            integrationTestPatterns.each { pattern ->
-                excludeTestsMatching pattern
-            }
+        useJUnitPlatform {
+            excludeTags 'integration'
         }
     }
 
@@ -186,11 +183,18 @@ subprojects {
         testClassesDirs = sourceSets.test.output.classesDirs
         classpath = sourceSets.test.runtimeClasspath
         shouldRunAfter tasks.named('test')
-        filter {
-            integrationTestPatterns.each { pattern ->
-                includeTestsMatching pattern
-            }
+        useJUnitPlatform {
+            includeTags 'integration'
         }
+        filter {
+            // Guards the split itself: a module that declares tagged tests but
+            // selects none has a broken filter, not an empty suite.
+            failOnNoMatchingTests = hasTaggedIntegrationTests()
+        }
+    }
+
+    tasks.named('check') {
+        dependsOn integrationTest
     }
 
     jacoco {
