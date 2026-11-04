@@ -1,8 +1,10 @@
 # Lumen Bank — frontend
 
 Production-ready SPA для банковского пет-проекта на **React 19 + TypeScript + Vite**.
-Интерфейс работает с реальным Spring Cloud Gateway и Keycloak, а без запущенного
-бэкенда автоматически поднимает in-browser API на MSW.
+Интерфейс работает с реальным Spring Cloud Gateway и Keycloak. В dev-режиме
+(`npm run dev`) без запущенного бэкенда автоматически поднимается in-browser API
+на MSW — и только в dev: production-сборка отключает его статически
+(`import.meta.env.DEV`), поэтому мок-код и `mockServiceWorker.js` в неё не попадают.
 
 ![Главная — desktop](docs/screenshots/home-desktop.png)
 
@@ -147,7 +149,9 @@ realm `bank-realm`, client `banking-frontend`.
   ID `1842` привязывается автоматически.
 - **Новый счёт открывается только с балансом `0.00` и без овердрафта** — это
   отражено в форме и подсказках.
-- **Sandbox-пополнение доступно только `employee`/`admin`**; для `customer`
+- **Sandbox-пополнение требует заголовка `Idempotency-Key`** и доступно только
+  `employee`/`admin`. UI генерирует ключ на попытку и переиспользует его при
+  повторе той же суммы; изменённая сумма считается новым намерением. Для `customer`
   вкладка показывает сценарий пополнения переводом и реквизиты.
 - **Депозиты создаются асинхронно** через RabbitMQ после пополнения, поэтому
   проверка депозита вынесена в отдельный staff-инструмент.
@@ -320,7 +324,6 @@ description must come from this script.
 - Sonar parameters have a single source: `sonar-project.properties`. CI passes
   only `sonar.organization` and `sonar.qualitygate.wait=true`.
 - Verified with Vitest 5.0.5 (`npx vitest --version`).
-- `src/mocks/**` ships as a 391 KB lazy chunk (`browser-*.js`) that is imported
-  only when the runtime `config.js` sets `MOCK_API=true`; it is not part of the
-  default production path, but it is excluded from coverage only after an
-  explicit decision (not yet applied).
+- `src/mocks/**` is dev-only: the dynamic import is guarded by
+  `import.meta.env.DEV`, so a production build folds the branch away and no
+  `browser-*.js` (MSW) chunk is emitted at all.

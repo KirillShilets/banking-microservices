@@ -212,7 +212,10 @@ Backend:
 .\gradlew.bat test
 ~~~
 
-Интеграционные тесты используют Testcontainers и требуют работающий Docker Engine.
+
+
+Unit- и интеграционные тесты разделены тегами JUnit: ./gradlew test — быстрые unit-тесты без Docker, ./gradlew integrationTest — Spring-контекст и Testcontainers (нужен работающий Docker Engine), ./gradlew check — оба набора плюс SpotBugs, Spotless и coverage-гейт.
+
 
 Frontend:
 
@@ -289,25 +292,51 @@ common-test-lib/       общая тестовая инфраструктура
 frontend/              React-клиент
 keycloak/import/       realm и demo-пользователи
 deploy/k8s/infra/      операторы и манифесты PostgreSQL, RabbitMQ, Keycloak и MinIO
+docs/adr/              архитектурные решения и компромиссы
+docs/deposit-sequence.md  сценарий пополнения и точки отказа
+SECURITY.md            политика безопасности и границы доверия
 postman/               заготовки для Postman
 ~~~
 
 ## 🔮 Планы по развитию (Roadmap)
-- ~~Security: JWT авторизация, OAuth2 Resource Server~~
-- Caching: Redis для кеширования
-- Orchestration: Kubernetes и Helm
-- Backups: регулярные backup и проверяемое восстановление PostgreSQL
-- Messaging: DLQ / Outbox / idempotency для RabbitMQ-сценариев
-- Observability: ELK Stack или Prometheus + Grafana
-- Saga Pattern: Распределенные транзакции
+
+Сделано (оставлено для истории):
+
+- ~~Security: JWT авторизация, OAuth2 Resource Server~~;
+- ~~Messaging: DLQ, transactional outbox, идемпотентность consumer'ов~~;
+- ~~Идемпотентность HTTP-пополнения по `Idempotency-Key`~~;
+- ~~Orchestration: Kubernetes и Helm, операторы PostgreSQL/RabbitMQ/Keycloak~~;
+- ~~Backups: регулярные backup PostgreSQL в S3-совместимое хранилище~~.
+
+Дальше по приоритету:
+
+1. **Проверяемое восстановление PostgreSQL** — backup есть, restore-drill нет.
+2. **Observability** — Prometheus + Grafana, JSON-логи, trace id в ответах об ошибке.
+3. **Кеширование** — Redis для чтения счетов (сейчас каждый запрос идёт в базу).
+4. **Rate limiting** на Gateway и лимиты размера запроса.
+5. **Деньги строкой в JSON** и валюта как атрибут счёта (см. ADR 0002).
+6. **OpenAPI + генерация TS-типов** вместо ручных DTO во фронтенде.
+
+Ограничения курса проекта (изучаем), см. раздел «Известные ограничения».
+
+Архитектурные решения и их компромиссы описаны в [docs/adr](docs/adr), сценарий
+пополнения с точками отказа — в [docs/deposit-sequence.md](docs/deposit-sequence.md).
 
 ## ⚠️ Известные ограничения
 
 - проект предназначен для учебного и локального использования;
-- demo-пароли нельзя использовать в production;
+- demo-пароли нельзя использовать в production (см. [SECURITY.md](SECURITY.md));
 - email требует доступного SMTP-сервера и корректного app password;
 - внешняя публикация сервисов напрямую, обходя Gateway, не является целевым сценарием;
-- удаление аккаунта и счетов реализовано через внутренние события.
+- физическое удаление аккаунтов и счетов не поддерживается: операция закрытия
+  счёта не реализована, `DELETE`-эндпоинтов нет, а историческая очередь удаления
+  счетов только отклоняет сообщения;
+- демо-сессия и in-browser API (MSW) собираются только в dev-сборке
+  (`import.meta.env.DEV`); в production-образ они не попадают;
+- внутренняя RabbitMQ-команда запроса аккаунта отдаёт ПДн (email, телефон) любому,
+  у кого есть доступ к брокеру — сужение до `owner_subject` запланировано;
+- сообщения `FAILED` в outbox не ретраятся и требуют ручного разбора; по ним
+  пишется ошибка в лог, но алертинга пока нет.
 
 ## 👨‍💻 Автор
 
