@@ -62,6 +62,7 @@ jobs:
             **/build/reports/tests/test/
             **/build/test-results/test/
             **/build/reports/spotbugs/
+            **/build/jacoco/*.exec
           retention-days: 7
 
   backend-integration:
@@ -82,10 +83,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # jacocoTestCoverageVerification depends on unit + integration execution
-      # data, so this step exercises both suites and then verifies the 60% gate.
+      # The coverage gate needs unit + integration execution data. Unit data is
+      # produced by the backend-unit job and shipped as an artifact, so this job
+      # downloads it instead of running the unit suite a second time.
+      - name: Download unit coverage data
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: backend-unit-reports
+          path: .
+
+      # -x test keeps jacocoTestReport from re-running the unit suite; the task
+      # still dependsOn integrationTest, which is the suite this job owns.
       - name: Run integration tests and verify combined coverage
-        run: ./gradlew integrationTest jacocoTestReport jacocoIntegrationTestReport jacocoTestCoverageVerification --no-daemon --continue
+        run: ./gradlew integrationTest jacocoTestReport jacocoIntegrationTestReport jacocoTestCoverageVerification --no-daemon --continue -x test
 
       - name: Upload integration test and coverage reports
         if: always()

@@ -39,7 +39,7 @@ MAIL_PORT: "587"
 - порт: 9999;
 - база: notification_service_database;
 - очередь: bank.notification.deposit.queue;
-- discovery: Eureka — только для локального запуска; в Kubernetes отключена;
+- discovery: сервис адресуется по Kubernetes DNS; Eureka в платформе не используется;
 - messaging: RabbitMQ.
 
 ## 🧪 Тесты

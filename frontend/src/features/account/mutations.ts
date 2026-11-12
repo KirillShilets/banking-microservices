@@ -1,3 +1,5 @@
+import { nextIntent, type IdempotencyIntent } from '../../lib/idempotency'
+import { useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { accountsApi, billsApi } from '../../api/modules'
 import { queryKeys } from '../../api/query-keys'
@@ -53,10 +55,21 @@ export function useOpenBill(accountId: number | null) {
 
 export function useSandboxDeposit(accountId: number | null) {
   const queryClient = useQueryClient()
+  const intent = useRef<IdempotencyIntent | null>(null)
 
   return useMutation({
-    mutationFn: (payload: SandboxDepositRequest) => billsApi.depositBill(payload),
+    mutationFn: (payload: SandboxDepositRequest) => {
+      // The key follows the submitted amount, so a retry replays the same
+      // request while an edited amount is treated as a new intent.
+      intent.current = nextIntent(
+        intent.current,
+        `${payload.billId}|${payload.amount}`,
+      )
+
+      return billsApi.depositBill(payload, intent.current.key)
+    },
     onSuccess: () => {
+      intent.current = null
       void queryClient.invalidateQueries({ queryKey: queryKeys.bills.all })
       if (accountId !== null) {
         void queryClient.invalidateQueries({

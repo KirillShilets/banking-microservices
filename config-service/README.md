@@ -12,7 +12,6 @@ config-service/src/main/resources/services/
 ├── account-service.yml
 ├── bill-service.yml
 ├── deposit-service.yml
-├── discovery-service.yml
 ├── gateway-service.yml
 └── notification-service.yml
 ~~~

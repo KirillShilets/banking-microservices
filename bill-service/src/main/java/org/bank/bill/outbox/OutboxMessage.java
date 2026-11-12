@@ -1,16 +1,17 @@
 package org.bank.bill.outbox;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -52,6 +53,14 @@ public class OutboxMessage {
 
     @Column(name = "next_attempt_at", nullable = false)
     private OffsetDateTime nextAttemptAt;
+
+    /**
+     * Until when the current relay instance owns this message. A lease that is
+     * set and expired means the owner died mid-publish, so the row becomes
+     * claimable again instead of being stuck forever.
+     */
+    @Column(name = "lease_expires_at")
+    private OffsetDateTime leaseExpiresAt;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

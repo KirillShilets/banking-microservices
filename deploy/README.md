@@ -1,6 +1,6 @@
 # Kubernetes deployment
 
-Kubernetes is the only supported runtime in this repository. The Helm chart deploys the application. Operators manage PostgreSQL, RabbitMQ and Keycloak. Config Server and Eureka are disabled for this runtime: Spring settings come from the application ConfigMap and services use Kubernetes DNS.
+Kubernetes is the only supported runtime in this repository. The Helm chart deploys the application. Operators manage PostgreSQL, RabbitMQ and Keycloak. Config Server is not deployed: Spring settings come from the application ConfigMap and services use Kubernetes DNS. Eureka is not part of the platform.
 
 ## Local kind deployment
 

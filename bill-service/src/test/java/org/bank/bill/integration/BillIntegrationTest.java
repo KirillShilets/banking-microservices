@@ -2,6 +2,7 @@ package org.bank.bill.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bank.bill.entity.Bill;
+import org.bank.bill.idempotency.IdempotencyKeyRepository;
 import org.bank.bill.messaging.AccountQueryGateway;
 import org.bank.bill.messaging.DepositCommandGateway;
 import org.bank.bill.messaging.NotificationCommandGateway;
@@ -9,6 +10,7 @@ import org.bank.bill.repository.BillRepository;
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.dto.request.BillRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +33,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt; // <-- новый
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -39,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @EnablePostgresTestConfiguration
 @SpringBootTest(properties = "app.sandbox.deposits-enabled=true")
+@Tag("integration")
 class BillIntegrationTest {
 
     private static final Long ACCOUNT_ID = 10L;
@@ -64,6 +69,9 @@ class BillIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private IdempotencyKeyRepository idempotencyKeyRepository;
+
     @MockitoBean
     private AccountQueryGateway accountQueryGateway;
 
@@ -84,6 +92,7 @@ class BillIntegrationTest {
 
     @AfterEach
     void clear() {
+        idempotencyKeyRepository.deleteAll();
         billRepository.deleteAll();
     }
 
@@ -213,7 +222,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -271,7 +280,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -325,7 +334,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -355,7 +364,7 @@ class BillIntegrationTest {
             }
             """.formatted(bill.getBillId());
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -381,7 +390,7 @@ class BillIntegrationTest {
             }
             """.formatted(NON_EXISTENT_ID);
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                         .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
@@ -403,5 +412,151 @@ class BillIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidJson))
                 .andExpect(status().isBadRequest());
+    }
+    @Test
+    @DisplayName("Should return 422 and keep the balance when the account has no contact email")
+    void depositBill_missingContactEmail() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, AMOUNT_100, false)
+        );
+
+        when(accountQueryGateway.getAccount(anyLong()))
+                .thenReturn(new AccountResponseDTO(
+                        OWNER_SUB,
+                        ACCOUNT_NAME,
+                        null,
+                        PHONE,
+                        DEFAULT_TIME
+                ));
+
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.message")
+                        .value("Account contact email is missing"));
+
+        assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
+                .isEqualByComparingTo(AMOUNT_100);
+    }
+    @Test
+    @DisplayName("Bills with an owner projection are authorized without account-service")
+    void getBill_withOwnerProjection_skipsAccountService() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, OWNER_SUB, AMOUNT_100, false)
+        );
+
+        mockMvc.perform(get("/bills/{billId}", bill.getBillId())
+                        .with(customerJwt(OWNER_SUB)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.billId").value(bill.getBillId()));
+
+        verify(accountQueryGateway, never()).getAccount(anyLong());
+    }
+    @Test
+    @DisplayName("Repeating a deposit with the same Idempotency-Key credits the balance once")
+    void depositBill_repeatedKey_creditsOnceAndReplaysResponse() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, OWNER_SUB, AMOUNT_100, false)
+        );
+
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        String firstResponse = mockMvc.perform(post("/bills/sandbox/deposits")
+                        .header("Idempotency-Key", "repeat-key-1")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").value(110.00))
+                .andReturn().getResponse().getContentAsString();
+
+        String secondResponse = mockMvc.perform(post("/bills/sandbox/deposits")
+                        .header("Idempotency-Key", "repeat-key-1")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(secondResponse).isEqualTo(firstResponse);
+        assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
+                .isEqualByComparingTo("110.00");
+    }
+
+    @Test
+    @DisplayName("Reusing an Idempotency-Key for a different amount is rejected")
+    void depositBill_reusedKeyWithDifferentAmount_isRejected() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, OWNER_SUB, AMOUNT_100, false)
+        );
+
+        String firstJson = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        String otherJson = """
+            {
+                "billId": %d,
+                "amount": "20.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .header("Idempotency-Key", "repeat-key-2")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(firstJson))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .header("Idempotency-Key", "repeat-key-2")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(otherJson))
+                .andExpect(status().isUnprocessableEntity());
+
+        assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
+                .isEqualByComparingTo("110.00");
+    }
+
+    @Test
+    @DisplayName("A deposit without an Idempotency-Key is rejected")
+    void depositBill_missingIdempotencyKey_isRejected() throws Exception {
+        Bill bill = billRepository.save(
+                new Bill(ACCOUNT_ID, OWNER_SUB, AMOUNT_100, false)
+        );
+
+        String json = """
+            {
+                "billId": %d,
+                "amount": "10.00"
+            }
+            """.formatted(bill.getBillId());
+
+        mockMvc.perform(post("/bills/sandbox/deposits")
+                        .with(adminJwt())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest());
+
+        assertThat(billRepository.findById(bill.getBillId()).orElseThrow().getAmount())
+                .isEqualByComparingTo(AMOUNT_100);
     }
 }

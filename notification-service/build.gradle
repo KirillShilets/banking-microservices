@@ -36,7 +36,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
     implementation "org.springframework.cloud:spring-cloud-starter-config"
-    implementation "org.springframework.cloud:spring-cloud-starter-netflix-eureka-client"
     implementation 'org.liquibase:liquibase-core'
     runtimeOnly 'org.postgresql:postgresql'
 
@@ -55,6 +54,3 @@ jar {
     enabled = false
 }
 
-tasks.withType(Test).configureEach {
-    useJUnitPlatform()
-}

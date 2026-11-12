@@ -51,8 +51,6 @@ services:
       # Placeholder until the first promotion writes the real saved.
       # A zero digest is never resolvable, so an accidental pull fails fast.
       digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-  discovery-service:
-    enabled: false
   account-service:
     replicas: 3
     image:

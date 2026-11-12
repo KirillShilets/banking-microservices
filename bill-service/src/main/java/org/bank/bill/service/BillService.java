@@ -14,8 +14,13 @@ public interface BillService {
             List<CreateBillRequestDTO> bills
     );
 
+    /**
+     * Opens bills on behalf of another service. The caller supplies the owner
+     * because it is the service that owns account data.
+     */
     List<Long> createBillsForAccountInternal(
             Long accountId,
+            String ownerSubject,
             List<CreateBillRequestDTO> bills
     );
 
@@ -28,6 +33,7 @@ public interface BillService {
     );
 
     BillDepositResponseDTO depositBill(
+            String idempotencyKey,
             Long billId,
             BigDecimal amount
     );

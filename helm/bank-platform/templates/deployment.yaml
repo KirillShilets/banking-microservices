@@ -99,10 +99,6 @@ spec:
             - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI
               value: {{ $root.Values.global.keycloak.jwkSetUri | quote }}
             {{- end }}
-            {{- if $root.Values.global.eurekaDefaultZone }}
-            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
-              value: {{ $root.Values.global.eurekaDefaultZone | quote }}
-            {{- end }}
             {{- if $root.Values.global.external.rabbitmqHost }}
             - name: RABBITMQ_HOST
               value: {{ $root.Values.global.external.rabbitmqHost | quote }}

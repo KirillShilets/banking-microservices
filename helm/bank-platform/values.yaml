@@ -10,7 +10,6 @@ global:
   keycloak:
     issuerUri: "http://keycloak.localhost/realms/bank-realm"
     jwkSetUri: ""
-  eurekaDefaultZone: ""
   external:
     rabbitmqHost: "rabbitmq"
     rabbitmqPort: 5672
@@ -62,7 +61,6 @@ frontendConfig:
 
 servicePorts:
   config-service: 8001
-  discovery-service: 8761
   account-service: 8081
   bill-service: 8082
   deposit-service: 8083
@@ -144,24 +142,6 @@ services:
       enabled: true
       type: ClusterIP
       annotations: {}
-    ingress:
-      enabled: false
-
-  discovery-service:
-    enabled: false
-    component: platform
-    replicas: 1
-    image:
-      repository: bank/discovery-service
-    containerPort: 8761
-    env: {}
-    resources: {}
-    probes:
-      readiness:
-        initialDelaySeconds: 10
-    service:
-      enabled: true
-      type: ClusterIP
     ingress:
       enabled: false
 

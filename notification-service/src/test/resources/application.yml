@@ -4,8 +4,6 @@ spring:
   cloud:
     config:
       enabled: false
-    discovery:
-      enabled: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
     enabled: false
@@ -25,7 +23,3 @@ spring:
       direct:
         auto-startup: false
 
-eureka:
-  client:
-    register-with-eureka: false
-    fetch-registry: false

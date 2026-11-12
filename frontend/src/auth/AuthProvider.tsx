@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { appConfig } from '../config'
+import { clearUserScopedData } from '../lib/user-data'
 import { createDemoUser, setDemoRole } from './demo-session'
 import { keycloak } from './keycloak'
 import type { AuthBootstrapResult } from './bootstrap'
@@ -44,6 +45,8 @@ export function AuthProvider({ bootstrap, children }: AuthProviderProps) {
   }, [])
 
   const logout = useCallback(async () => {
+    clearUserScopedData()
+
     if (appConfig.demoMode) {
       setUser(null)
       setSessionExpired(false)

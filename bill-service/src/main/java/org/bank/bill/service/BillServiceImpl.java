@@ -1,71 +1,84 @@
 package org.bank.bill.service;
 
+import org.bank.bill.config.DepositProperties;
+import org.bank.bill.config.SandboxProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bank.bill.entity.Bill;
+import org.bank.bill.idempotency.IdempotencyClaim;
+import org.bank.bill.idempotency.IdempotencyGuard;
 import org.bank.bill.messaging.AccountQueryGateway;
-import org.bank.bill.outbox.OutboxService;
 import org.bank.bill.repository.BillRepository;
 import org.bank.dto.request.CreateBillRequestDTO;
-import org.bank.dto.request.DepositRequestDTO;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
 import org.bank.dto.response.BillResponseDTO;
+import org.bank.exception.AlreadyExistsException;
 import org.bank.exception.BadRequestException;
 import org.bank.exception.ForbiddenException;
 import org.bank.exception.NotFoundException;
+import org.bank.exception.UnprocessableEntityException;
 import org.bank.security.BankRoles;
 import org.bank.security.web.AuthenticatedUser;
 import org.bank.validation.BillOpeningValidator;
 import org.bank.validation.MoneyValidation;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
+/**
+ * Orchestrates bill use cases and answers "may this caller touch it?".
+ *
+ * <p>Authorization uses the {@code owner_subject} projection stored on the bill
+ * whenever it is present, so no remote call is needed to decide access. Methods
+ * that still need account-service (to learn the owner of a legacy bill or the
+ * contact email for a notification) deliberately run outside a transaction: the
+ * transactional cores live in {@link BillOpeningExecutor} and
+ * {@link BillDepositExecutor}.
+ */
 @Service
 public class BillServiceImpl implements BillService {
 
+    private static final int MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+
     private final BillRepository billRepository;
     private final AccountQueryGateway accountQueryGateway;
-    private final OutboxService outboxService;
+    private final BillOpeningExecutor billOpeningExecutor;
+    private final BillDepositExecutor billDepositExecutor;
+    private final IdempotencyGuard idempotencyGuard;
+    private final ObjectMapper objectMapper;
     private final AuthenticatedUser authenticatedUser;
-
-    private final BigDecimal minDepositAmount;
-    private final boolean sandboxDepositsEnabled;
+    private final DepositProperties depositProperties;
+    private final SandboxProperties sandboxProperties;
 
     public BillServiceImpl(
             BillRepository billRepository,
             AccountQueryGateway accountQueryGateway,
-            OutboxService outboxService,
+            BillOpeningExecutor billOpeningExecutor,
+            BillDepositExecutor billDepositExecutor,
+            IdempotencyGuard idempotencyGuard,
+            ObjectMapper objectMapper,
             AuthenticatedUser authenticatedUser,
-            @Value("${app.deposit.min-amount:10.00}")
-            BigDecimal minDepositAmount,
-            @Value("${app.sandbox.deposits-enabled:false}")
-            boolean sandboxDepositsEnabled
+            DepositProperties depositProperties,
+            SandboxProperties sandboxProperties
     ) {
         this.billRepository = billRepository;
         this.accountQueryGateway = accountQueryGateway;
-        this.outboxService = outboxService;
+        this.billOpeningExecutor = billOpeningExecutor;
+        this.billDepositExecutor = billDepositExecutor;
+        this.idempotencyGuard = idempotencyGuard;
+        this.objectMapper = objectMapper;
         this.authenticatedUser = authenticatedUser;
-
-        try {
-            this.minDepositAmount =
-                    MoneyValidation.positiveAmount(minDepositAmount);
-        } catch (BadRequestException exception) {
-            throw new IllegalArgumentException(
-                    "app.deposit.min-amount must be a valid positive monetary amount",
-                    exception
-            );
-        }
-
-        this.sandboxDepositsEnabled = sandboxDepositsEnabled;
+        this.depositProperties = depositProperties;
+        this.sandboxProperties = sandboxProperties;
     }
 
     @Override
-    @Transactional(readOnly = true)
     public BillResponseDTO getBill(Long billId) {
         Bill bill = getBillById(billId);
         assertCanAccessBill(bill);
@@ -74,7 +87,6 @@ public class BillServiceImpl implements BillService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<BillResponseDTO> getBillsByAccountId(Long accountId) {
         BillOpeningValidator.validateAccountId(accountId);
         assertCanAccessAccount(accountId);
@@ -82,11 +94,10 @@ public class BillServiceImpl implements BillService {
         return billRepository.getBillsByAccountId(accountId)
                 .stream()
                 .map(this::toResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
-    @Transactional
     public Long createBill(
             Long accountId,
             BigDecimal amount,
@@ -95,23 +106,12 @@ public class BillServiceImpl implements BillService {
         BillOpeningValidator.validateAccountId(accountId);
         BillOpeningValidator.validateOpening(amount, overdraftEnabled);
 
-        assertCanAccessAccount(accountId);
+        AccountResponseDTO account = assertCanAccessAccount(accountId);
 
-        Bill bill = new Bill(
-                accountId,
-                new BigDecimal("0.00"),
-                false
-        );
-
-        if (!billRepository.existsBillByAccountId(accountId)) {
-            bill.setIsDefault(true);
-        }
-
-        return billRepository.save(bill).getBillId();
+        return billOpeningExecutor.openBill(accountId, account.ownerSubject());
     }
 
     @Override
-    @Transactional
     public List<Long> createBillsForAccount(
             Long accountId,
             List<CreateBillRequestDTO> bills
@@ -119,37 +119,49 @@ public class BillServiceImpl implements BillService {
         BillOpeningValidator.validateAccountId(accountId);
         BillOpeningValidator.validateOpenings(bills);
 
-        assertCanAccessAccount(accountId);
+        AccountResponseDTO account = assertCanAccessAccount(accountId);
 
-        return saveBillsForAccount(accountId, bills);
+        return billOpeningExecutor.openBills(
+                accountId,
+                account.ownerSubject(),
+                bills
+        );
     }
 
     @Override
-    @Transactional
     public List<Long> createBillsForAccountInternal(
             Long accountId,
+            String ownerSubject,
             List<CreateBillRequestDTO> bills
     ) {
         BillOpeningValidator.validateAccountId(accountId);
         BillOpeningValidator.validateOpenings(bills);
 
-        return saveBillsForAccount(accountId, bills);
+        return billOpeningExecutor.openBills(accountId, ownerSubject, bills);
     }
 
     @Override
-    @Transactional
     public BillDepositResponseDTO depositBill(
+            String idempotencyKey,
             Long billId,
             BigDecimal amount
     ) {
         assertSandboxDepositAllowed();
 
+        if (idempotencyKey == null || idempotencyKey.isBlank()
+                || idempotencyKey.length() > MAX_IDEMPOTENCY_KEY_LENGTH) {
+            throw new BadRequestException(
+                    "Idempotency-Key must be provided and at most "
+                            + MAX_IDEMPOTENCY_KEY_LENGTH + " characters"
+            );
+        }
+
         if (billId == null || billId <= 0) {
             throw new BadRequestException("Bill id must be positive");
         }
 
-        BigDecimal normalizedAmount =
-                MoneyValidation.positiveAmount(amount);
+        BigDecimal normalizedAmount = MoneyValidation.positiveAmount(amount);
+        BigDecimal minDepositAmount = depositProperties.minAmount();
 
         if (normalizedAmount.compareTo(minDepositAmount) < 0) {
             throw new BadRequestException(
@@ -158,101 +170,83 @@ public class BillServiceImpl implements BillService {
             );
         }
 
-        Bill bill = billRepository.findByIdForUpdate(billId)
-                .orElseThrow(() -> new NotFoundException(
-                        "Bill not found with id: " + billId
-                ));
+        Bill bill = getBillById(billId);
+        String recipient = authorizeAndResolveRecipient(bill);
 
-        AccountResponseDTO account = assertCanAccessBill(bill);
+        IdempotencyClaim claim = idempotencyGuard.claim(
+                idempotencyKey,
+                requestHash(billId, normalizedAmount)
+        );
 
-        String recipient = account.email();
+        if (claim.outcome() == IdempotencyClaim.Outcome.REPLAY) {
+            return replay(claim.responseBody());
+        }
 
-        if (recipient == null || recipient.isBlank()) {
-            throw new IllegalStateException(
-                    "Account contact email is missing"
+        if (claim.outcome() == IdempotencyClaim.Outcome.CONFLICT) {
+            throw new UnprocessableEntityException(
+                    "Idempotency-Key was already used for a different request"
             );
         }
 
-        BigDecimal currentBalance =
-                MoneyValidation.checkedBalance(bill.getAmount());
+        if (claim.outcome() == IdempotencyClaim.Outcome.IN_PROGRESS) {
+            throw new AlreadyExistsException(
+                    "A deposit with this Idempotency-Key is already in progress"
+            );
+        }
 
-        BigDecimal newBalance =
-                MoneyValidation.checkedBalance(
-                        currentBalance.add(normalizedAmount)
-                );
+        try {
+            return billDepositExecutor.applyDeposit(
+                    idempotencyKey,
+                    billId,
+                    normalizedAmount,
+                    recipient
+            );
+        } catch (RuntimeException exception) {
+            // Let the client retry instead of waiting for the claim to go stale.
+            idempotencyGuard.release(idempotencyKey);
+            throw exception;
+        }
+    }
 
-        bill.setAmount(newBalance);
+    private BillDepositResponseDTO replay(String responseBody) {
+        try {
+            return objectMapper.readValue(
+                    responseBody,
+                    BillDepositResponseDTO.class
+            );
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException(
+                    "Cannot read the stored idempotent response",
+                    exception
+            );
+        }
+    }
 
-        outboxService.saveEvent(
-                "BILL",
-                billId.toString(),
-                "DEPOSIT_CREATED",
-                new DepositRequestDTO(
-                        billId,
-                        normalizedAmount,
-                        recipient,
-                        UUID.randomUUID()
-                )
-        );
+    private static String requestHash(Long billId, BigDecimal amount) {
+        String canonicalRequest = billId + "|" + amount.toPlainString();
 
-        outboxService.saveEvent(
-                "BILL",
-                billId.toString(),
-                "NOTIFICATION_CREATED",
-                new DepositRequestDTO(
-                        billId,
-                        normalizedAmount,
-                        recipient,
-                        UUID.randomUUID()
-                )
-        );
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(canonicalRequest.getBytes(StandardCharsets.UTF_8));
 
-        return new BillDepositResponseDTO(
-                bill.getBillId(),
-                bill.getAccountId(),
-                bill.getAmount(),
-                recipient,
-                bill.getIsDefault(),
-                bill.getOverdraftEnabled(),
-                bill.getCreationDate()
-        );
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
     }
 
     private void assertSandboxDepositAllowed() {
-        if (!sandboxDepositsEnabled) {
+        if (!sandboxProperties.depositsEnabled()) {
             throw new ForbiddenException(
                     "Sandbox deposits are disabled"
             );
         }
 
-        if (!authenticatedUser.hasRole(BankRoles.ADMIN)
-                && !authenticatedUser.hasRole(BankRoles.EMPLOYEE)) {
+        if (!isStaff()) {
             throw new ForbiddenException(
                     "Sandbox deposits require employee or admin role"
             );
         }
-    }
-
-    private List<Long> saveBillsForAccount(
-            Long accountId,
-            List<CreateBillRequestDTO> bills
-    ) {
-        List<Bill> billsToSave = bills.stream()
-                .map(ignored -> new Bill(
-                        accountId,
-                        new BigDecimal("0.00"),
-                        false
-                ))
-                .collect(Collectors.toList());
-
-        if (!billRepository.existsBillByAccountId(accountId)) {
-            billsToSave.get(0).setIsDefault(true);
-        }
-
-        return billRepository.saveAll(billsToSave)
-                .stream()
-                .map(Bill::getBillId)
-                .collect(Collectors.toList());
     }
 
     private Bill getBillById(Long billId) {
@@ -266,18 +260,49 @@ public class BillServiceImpl implements BillService {
                 ));
     }
 
-    private AccountResponseDTO assertCanAccessAccount(Long accountId) {
-        AccountResponseDTO account =
-                accountQueryGateway.getAccount(accountId);
+    /**
+     * Authorizes the caller and returns the address the deposit notification must
+     * be sent to. The remote call it may perform happens outside any transaction.
+     */
+    private String authorizeAndResolveRecipient(Bill bill) {
+        String ownerSubject = bill.getOwnerSubject();
 
-        if (authenticatedUser.hasRole(BankRoles.ADMIN)
-                || authenticatedUser.hasRole(BankRoles.EMPLOYEE)) {
-            return account;
+        if (ownerSubject == null) {
+            return requireContactEmail(
+                    assertCanAccessAccount(bill.getAccountId())
+            );
         }
 
-        if (authenticatedUser.hasRole(BankRoles.CUSTOMER)
-                && authenticatedUser.subject()
-                .equals(account.ownerSubject())) {
+        if (!isStaff() && !isOwner(ownerSubject)) {
+            throw new ForbiddenException(
+                    "Access to this account's bills is denied"
+            );
+        }
+
+        return requireContactEmail(
+                accountQueryGateway.getAccount(bill.getAccountId())
+        );
+    }
+
+    private void assertCanAccessBill(Bill bill) {
+        String ownerSubject = bill.getOwnerSubject();
+
+        if (ownerSubject == null) {
+            assertCanAccessAccount(bill.getAccountId());
+            return;
+        }
+
+        if (!isStaff() && !isOwner(ownerSubject)) {
+            throw new ForbiddenException(
+                    "Access to this account's bills is denied"
+            );
+        }
+    }
+
+    private AccountResponseDTO assertCanAccessAccount(Long accountId) {
+        AccountResponseDTO account = accountQueryGateway.getAccount(accountId);
+
+        if (isStaff() || isOwner(account.ownerSubject())) {
             return account;
         }
 
@@ -286,8 +311,27 @@ public class BillServiceImpl implements BillService {
         );
     }
 
-    private AccountResponseDTO assertCanAccessBill(Bill bill) {
-        return assertCanAccessAccount(bill.getAccountId());
+    private boolean isStaff() {
+        return authenticatedUser.hasRole(BankRoles.ADMIN)
+                || authenticatedUser.hasRole(BankRoles.EMPLOYEE);
+    }
+
+    private boolean isOwner(String ownerSubject) {
+        return ownerSubject != null
+                && authenticatedUser.hasRole(BankRoles.CUSTOMER)
+                && authenticatedUser.subject().equals(ownerSubject);
+    }
+
+    private static String requireContactEmail(AccountResponseDTO account) {
+        String recipient = account.email();
+
+        if (recipient == null || recipient.isBlank()) {
+            throw new UnprocessableEntityException(
+                    "Account contact email is missing"
+            );
+        }
+
+        return recipient;
     }
 
     private BillResponseDTO toResponse(Bill bill) {
