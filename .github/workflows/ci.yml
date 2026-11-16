@@ -461,7 +461,7 @@ jobs:
 
   sonar:
     name: SonarQube analysis and Quality Gate
-    needs: [backend-integration]
+    needs: [ backend-integration ]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -523,16 +523,22 @@ jobs:
       - name: Verify Sonar inputs were restored
         run: |
           set -euo pipefail
+          # One SpotBugs report per Gradle module; derive the expectation from
+          # settings.gradle so adding/removing a module cannot desync this gate.
+          module_count=$(grep -cE "^include " settings.gradle)
+          echo "Gradle modules: ${module_count}"
+
           xml_count=$(find . -type f -name 'jacoco*.xml' | wc -l)
           echo "JaCoCo XML reports present: ${xml_count}"
-          if [ "${xml_count}" -lt 10 ]; then
-            echo "ERROR: expected at least 10 JaCoCo XML reports, got ${xml_count}"
+          if [ "${xml_count}" -lt "${module_count}" ]; then
+            echo "ERROR: expected at least ${module_count} JaCoCo XML reports, got ${xml_count}"
             exit 1
           fi
+
           spotbugs_count=$(find . -type f -name 'main.xml' -path '*spotbugs*' | wc -l)
           echo "SpotBugs XML reports present: ${spotbugs_count}"
-          if [ "${spotbugs_count}" -lt 10 ]; then
-            echo "ERROR: expected at least 10 SpotBugs XML reports, got ${spotbugs_count}"
+          if [ "${spotbugs_count}" -ne "${module_count}" ]; then
+            echo "ERROR: expected ${module_count} SpotBugs XML reports, got ${spotbugs_count}"
             exit 1
           fi
 
