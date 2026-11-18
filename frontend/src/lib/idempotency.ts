@@ -11,6 +11,24 @@ export interface IdempotencyIntent {
   readonly key: string
 }
 
+function uuidV4FromRandomValues(cryptoApi: Crypto): string {
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(16))
+
+  // RFC 4122: version 4, variant 10xx.
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
+
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join('-')
+}
+
 export function newIdempotencyKey(): string {
   const cryptoApi = globalThis.crypto
 
@@ -18,15 +36,20 @@ export function newIdempotencyKey(): string {
     return cryptoApi.randomUUID()
   }
 
-  // Only reachable in environments without Web Crypto (old jsdom, insecure
-  // context); the key still has to be unique per submission.
-  return `idem-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  // randomUUID() is limited to secure contexts; getRandomValues() is not, and
+  // it is still a cryptographically strong source.
+  if (cryptoApi && typeof cryptoApi.getRandomValues === 'function') {
+    return uuidV4FromRandomValues(cryptoApi)
+  }
+
+  // Never fall back to a predictable key for a money-moving request.
+  throw new Error('No secure random source available to create an idempotency key')
 }
 
 export function nextIntent(
-  current: IdempotencyIntent | null,
-  signature: string,
-  generate: () => string = newIdempotencyKey,
+    current: IdempotencyIntent | null,
+    signature: string,
+    generate: () => string = newIdempotencyKey,
 ): IdempotencyIntent {
   if (current !== null && current.signature === signature) {
     return current
