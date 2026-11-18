@@ -6,6 +6,7 @@ import org.bank.notification.entity.DeliveryStatus;
 import org.bank.notification.entity.NotificationDelivery;
 import org.bank.notification.repository.NotificationDeliveryRepository;
 import org.bank.notification.service.NotificationService;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
                 "notification.claim-timeout-minutes=5"
         }
 )
+@Tag("integration")
 class NotificationIntegrationTest {
 
     @Autowired

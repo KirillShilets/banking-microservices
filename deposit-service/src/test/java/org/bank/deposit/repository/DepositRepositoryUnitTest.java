@@ -2,6 +2,7 @@ package org.bank.deposit.repository;
 
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.deposit.entity.Deposit;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @EnablePostgresTestConfiguration
+@Tag("integration")
 class DepositRepositoryUnitTest {
 
     private static final Long BILL_ID = 1L;

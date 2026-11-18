@@ -25,6 +25,3 @@ dependencies {
     api 'org.testcontainers:testcontainers:2.0.2'
 }
 
-test {
-    useJUnitPlatform()
-}

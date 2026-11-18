@@ -3,7 +3,7 @@ package org.bank.bill;
 import org.bank.messaging.config.RabbitMessagingConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -12,7 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         "org.bank.exception.handler",
         "org.bank.migration"
 })
-@EnableDiscoveryClient
+@ConfigurationPropertiesScan
 @EnableScheduling
 @Import(RabbitMessagingConfiguration.class)
 public class BillApplication {

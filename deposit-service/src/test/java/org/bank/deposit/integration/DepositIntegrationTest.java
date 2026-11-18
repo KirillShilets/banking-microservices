@@ -5,6 +5,7 @@ import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.deposit.entity.Deposit;
 import org.bank.deposit.repository.DepositRepository;
 import org.bank.dto.request.DepositRequestDTO;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @EnablePostgresTestConfiguration
+@Tag("integration")
 class DepositIntegrationTest {
 
     private static final Long NON_EXISTENT_ID = 99999L;

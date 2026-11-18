@@ -62,6 +62,7 @@ jobs:
             **/build/reports/tests/test/
             **/build/test-results/test/
             **/build/reports/spotbugs/
+            **/build/jacoco/*.exec
           retention-days: 7
 
   backend-integration:
@@ -82,10 +83,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # jacocoTestCoverageVerification depends on unit + integration execution
-      # data, so this step exercises both suites and then verifies the 60% gate.
+      # The coverage gate needs unit + integration execution data. Unit data is
+      # produced by the backend-unit job and shipped as an artifact, so this job
+      # downloads it instead of running the unit suite a second time.
+      - name: Download unit coverage data
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: backend-unit-reports
+          path: .
+
+      # -x test keeps jacocoTestReport from re-running the unit suite; the task
+      # still dependsOn integrationTest, which is the suite this job owns.
       - name: Run integration tests and verify combined coverage
-        run: ./gradlew integrationTest jacocoTestReport jacocoIntegrationTestReport jacocoTestCoverageVerification --no-daemon --continue
+        run: ./gradlew integrationTest jacocoTestReport jacocoIntegrationTestReport jacocoTestCoverageVerification --no-daemon --continue -x test
 
       - name: Upload integration test and coverage reports
         if: always()
@@ -451,7 +461,7 @@ jobs:
 
   sonar:
     name: SonarQube analysis and Quality Gate
-    needs: [backend-integration]
+    needs: [ backend-integration ]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -513,16 +523,22 @@ jobs:
       - name: Verify Sonar inputs were restored
         run: |
           set -euo pipefail
+          # One SpotBugs report per Gradle module; derive the expectation from
+          # settings.gradle so adding/removing a module cannot desync this gate.
+          module_count=$(grep -cE "^include " settings.gradle)
+          echo "Gradle modules: ${module_count}"
+
           xml_count=$(find . -type f -name 'jacoco*.xml' | wc -l)
           echo "JaCoCo XML reports present: ${xml_count}"
-          if [ "${xml_count}" -lt 10 ]; then
-            echo "ERROR: expected at least 10 JaCoCo XML reports, got ${xml_count}"
+          if [ "${xml_count}" -lt "${module_count}" ]; then
+            echo "ERROR: expected at least ${module_count} JaCoCo XML reports, got ${xml_count}"
             exit 1
           fi
+
           spotbugs_count=$(find . -type f -name 'main.xml' -path '*spotbugs*' | wc -l)
           echo "SpotBugs XML reports present: ${spotbugs_count}"
-          if [ "${spotbugs_count}" -lt 10 ]; then
-            echo "ERROR: expected at least 10 SpotBugs XML reports, got ${spotbugs_count}"
+          if [ "${spotbugs_count}" -ne "${module_count}" ]; then
+            echo "ERROR: expected ${module_count} SpotBugs XML reports, got ${spotbugs_count}"
             exit 1
           fi
 

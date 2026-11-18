@@ -8,6 +8,7 @@ import org.bank.account.messaging.BillCommandGateway;
 import org.bank.account.repository.AccountRepository;
 import org.bank.config.annotation.EnablePostgresTestConfiguration;
 import org.bank.dto.request.CreateBillRequestDTO;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @EnablePostgresTestConfiguration
+@Tag("integration")
 class AccountIntegrationTest {
 
     private static final Long NON_EXISTENT_ID = 99999L;

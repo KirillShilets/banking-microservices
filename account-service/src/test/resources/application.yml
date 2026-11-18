@@ -4,8 +4,6 @@ spring:
   cloud:
     config:
       enabled: false
-    discovery:
-      enabled: false
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
   rabbitmq:
@@ -21,7 +19,3 @@ spring:
         jwt:
           jwk-set-uri: http://127.0.0.1:1/dummy
 
-eureka:
-  client:
-    register-with-eureka: false
-    fetch-registry: false

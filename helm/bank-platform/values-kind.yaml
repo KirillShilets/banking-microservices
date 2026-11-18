@@ -55,9 +55,6 @@ resources:
 services:
   config-service:
     replicas: 1
-  discovery-service:
-    replicas: 1
-    enabled: false
   account-service:
     replicas: 1
   bill-service:

@@ -47,7 +47,7 @@
 - порт: 8081;
 - база: account_service_database;
 - конфигурация: Config Server, ключ account-service — для локального запуска; в Kubernetes настройки приходят из ConfigMap `bank-application-config`;
-- discovery: Eureka — только для локального запуска; в Kubernetes discovery отключена, сервис адресуется по Kubernetes DNS;
+- discovery: сервис адресуется по Kubernetes DNS; Eureka в платформе не используется;
 - messaging: RabbitMQ.
 
 Секреты базы данных задаются через ACCOUNT_DB_USER и ACCOUNT_DB_PASSWORD в .env.

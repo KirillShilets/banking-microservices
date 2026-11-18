@@ -1,8 +1,9 @@
 package org.bank.bill.service;
 
+import org.bank.bill.config.DepositProperties;
+import org.bank.bill.config.SandboxProperties;
 import org.bank.bill.entity.Bill;
 import org.bank.bill.messaging.AccountQueryGateway;
-import org.bank.bill.outbox.OutboxService;
 import org.bank.bill.repository.BillRepository;
 import org.bank.dto.response.AccountResponseDTO;
 import org.bank.dto.response.BillDepositResponseDTO;
@@ -19,6 +20,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bank.bill.idempotency.IdempotencyClaim;
+import org.bank.bill.idempotency.IdempotencyGuard;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -42,6 +46,7 @@ class BillServiceUnitTest {
     private static final String PHONE = "+375444243564";
     private static final String OWNER_SUB = "11111111-1111-1111-1111-111111111111";
     private static final String OTHER_SUB = "22222222-2222-2222-2222-222222222222";
+    private static final String IDEMPOTENCY_KEY = "deposit-key-1";
 
     @Mock
     private BillRepository billRepository;
@@ -50,7 +55,13 @@ class BillServiceUnitTest {
     private AccountQueryGateway accountQueryGateway;
 
     @Mock
-    private OutboxService outboxService;
+    private BillOpeningExecutor billOpeningExecutor;
+
+    @Mock
+    private BillDepositExecutor billDepositExecutor;
+
+    @Mock
+    private IdempotencyGuard idempotencyGuard;
 
     @Mock
     private AuthenticatedUser authenticatedUser;
@@ -62,10 +73,13 @@ class BillServiceUnitTest {
         billService = new BillServiceImpl(
                 billRepository,
                 accountQueryGateway,
-                outboxService,
+                billOpeningExecutor,
+                billDepositExecutor,
+                idempotencyGuard,
+                new ObjectMapper().findAndRegisterModules(),
                 authenticatedUser,
-                MIN_DEPOSIT_LIMIT,
-                true
+                new DepositProperties(MIN_DEPOSIT_LIMIT),
+                new SandboxProperties(true)
         );
     }
 
@@ -143,17 +157,8 @@ class BillServiceUnitTest {
         when(accountQueryGateway.getAccount(ACCOUNT_ID))
                 .thenReturn(account());
 
-        Bill saved = new Bill(
-                ACCOUNT_ID,
-                BigDecimal.ZERO,
-                false
-        );
-        saved.setBillId(100L);
-
-        when(billRepository.existsBillByAccountId(ACCOUNT_ID))
-                .thenReturn(false);
-        when(billRepository.save(any(Bill.class)))
-                .thenReturn(saved);
+        when(billOpeningExecutor.openBill(ACCOUNT_ID, OWNER_SUB))
+                .thenReturn(100L);
 
         Long billId = billService.createBill(
                 ACCOUNT_ID,
@@ -163,7 +168,7 @@ class BillServiceUnitTest {
 
         assertEquals(100L, billId);
 
-        verify(billRepository).save(any(Bill.class));
+        verify(billOpeningExecutor).openBill(ACCOUNT_ID, OWNER_SUB);
     }
 
     @Test
@@ -174,26 +179,37 @@ class BillServiceUnitTest {
         Bill bill = bill();
         bill.setCreationDate(OffsetDateTime.now());
 
-        when(billRepository.findByIdForUpdate(BILL_ID))
+        when(billRepository.findById(BILL_ID))
                 .thenReturn(Optional.of(bill));
 
         when(accountQueryGateway.getAccount(ACCOUNT_ID))
                 .thenReturn(account());
 
+        BillDepositResponseDTO deposited = new BillDepositResponseDTO(
+                BILL_ID,
+                ACCOUNT_ID,
+                AMOUNT_100.add(DEPOSIT_20),
+                EMAIL,
+                false,
+                false,
+                DEFAULT_TIME
+        );
+
+        when(idempotencyGuard.claim(anyString(), anyString()))
+                .thenReturn(IdempotencyClaim.claimed());
+        when(billDepositExecutor.applyDeposit(anyString(), eq(BILL_ID), eq(DEPOSIT_20), eq(EMAIL)))
+                .thenReturn(deposited);
+
         BillDepositResponseDTO response =
-                billService.depositBill(BILL_ID, DEPOSIT_20);
+                billService.depositBill(IDEMPOTENCY_KEY, BILL_ID, DEPOSIT_20);
 
         assertEquals(
                 AMOUNT_100.add(DEPOSIT_20),
                 response.amount()
         );
 
-        verify(outboxService, times(2)).saveEvent(
-                eq("BILL"),
-                eq(BILL_ID.toString()),
-                anyString(),
-                any()
-        );
+        verify(billDepositExecutor)
+                .applyDeposit(IDEMPOTENCY_KEY, BILL_ID, DEPOSIT_20, EMAIL);
     }
 
     @Test
@@ -204,6 +220,7 @@ class BillServiceUnitTest {
         assertThrows(
                 BadRequestException.class,
                 () -> billService.depositBill(
+                        IDEMPOTENCY_KEY,
                         BILL_ID,
                         WRONG_DEPOSIT
                 )
@@ -211,6 +228,6 @@ class BillServiceUnitTest {
 
         verify(billRepository, never()).findByIdForUpdate(anyLong());
         verify(billRepository, never()).save(any());
-        verifyNoInteractions(outboxService, accountQueryGateway);
+        verifyNoInteractions(billDepositExecutor, accountQueryGateway);
     }
 }

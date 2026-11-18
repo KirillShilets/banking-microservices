@@ -228,17 +228,19 @@ class BillControllerUnitTest {
                 );
 
         when(billService.depositBill(
+                "test-key",
                 request.billId(),
                 request.amount()
         )).thenReturn(response);
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", "test-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.amount").value(200.00));
 
         verify(billService).depositBill(
+                "test-key",
                 request.billId(),
                 request.amount()
         );
@@ -251,11 +253,12 @@ class BillControllerUnitTest {
                 new SandboxDepositRequest(BILL_ID, AMOUNT_100);
 
         when(billService.depositBill(
+                "test-key",
                 request.billId(),
                 request.amount()
         )).thenThrow(new BadRequestException("Deposit too small"));
 
-        mockMvc.perform(post("/bills/sandbox/deposits")
+        mockMvc.perform(post("/bills/sandbox/deposits").header("Idempotency-Key", "test-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())

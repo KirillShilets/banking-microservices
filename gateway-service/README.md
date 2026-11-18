@@ -1,6 +1,6 @@
 # 🚪 Gateway Service
 
-Единая внешняя точка входа в backend. Сервис построен на Spring Cloud Gateway WebFlux. В Kubernetes маршруты идут по Kubernetes DNS (`gateway-service-kubernetes.yml`), а `lb://service-name` через Eureka используется только при локальном запуске.
+Единая внешняя точка входа в backend. Сервис построен на Spring Cloud Gateway WebFlux. Маршруты указывают на сервисы напрямую: локально — `localhost`, в Kubernetes — cluster DNS (`gateway-service-kubernetes.yml`). Eureka в платформе не используется.
 
 ## 🛣️ Маршруты
 
@@ -30,7 +30,7 @@ Notification Service работает только через RabbitMQ и отд
 .\gradlew.bat :gateway-service:bootRun
 ~~~
 
-В обычном сценарии запускать Gateway нужно после Config Server, Eureka, Keycloak и бизнес-сервисов.
+В обычном сценарии запускать Gateway нужно после Config Server, Keycloak и бизнес-сервисов.
 
 ## 🔗 Пример запроса
 

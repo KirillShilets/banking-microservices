@@ -45,7 +45,7 @@ Sandbox-пополнение доступно только ролям employee �
 - база: bill_service_database;
 - `DEPOSIT_MIN_AMOUNT` — минимальная сумма пополнения, по умолчанию 2.60, задается в конфигурации сервиса;
 - `APP_SANDBOX_DEPOSITS_ENABLED` (`app.sandbox.deposits-enabled`) — по умолчанию false, в kind включён в `helm/bank-platform/values-kind.yaml`;
-- discovery: Eureka — только для локального запуска; в Kubernetes discovery отключена, сервис адресуется по Kubernetes DNS;
+- discovery: сервис адресуется по Kubernetes DNS; Eureka в платформе не используется;
 - messaging: RabbitMQ.
 
 ## 🧪 Тесты

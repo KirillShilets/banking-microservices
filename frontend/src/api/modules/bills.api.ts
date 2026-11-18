@@ -1,4 +1,4 @@
-﻿import { apiRequest } from '../core'
+import { apiRequest } from '../core'
 import type {
     BillRequestDTO,
     CreateBillRequestDTO,
@@ -37,9 +37,10 @@ export const billsApi = {
             bills,
         ),
 
-    depositBill: (payload: SandboxDepositRequest) =>
+    depositBill: (payload: SandboxDepositRequest, idempotencyKey: string) =>
         apiRequest.post<BillDepositResponseDTO, SandboxDepositRequest>(
             '/bills/sandbox/deposits',
             payload,
+            { headers: { 'Idempotency-Key': idempotencyKey } },
         ),
 }

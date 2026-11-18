@@ -3,7 +3,6 @@ package org.bank.deposit;
 import org.bank.messaging.config.RabbitMessagingConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.context.annotation.Import;
 
 @SpringBootApplication(scanBasePackages = {
@@ -11,7 +10,6 @@ import org.springframework.context.annotation.Import;
         "org.bank.exception.handler",
         "org.bank.migration"
 })
-@EnableDiscoveryClient
 @Import(RabbitMessagingConfiguration.class)
 public class DepositApplication {
     public static void main(String[] args) {

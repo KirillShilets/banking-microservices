@@ -8,21 +8,19 @@ spring:
     gateway:
       server:
         webflux:
-          discovery:
-            locator:
-              enabled: false
-              lower-case-service-id: true
           routes:
             - id: account_service_route
-              uri: lb://account-service
+              # Eureka is not part of the platform: routes target services directly.
+              # The kubernetes profile overrides these with cluster DNS names.
+              uri: http://localhost:8081
               predicates:
                 - Path=/accounts/**
             - id: bill_service_route
-              uri: lb://bill-service
+              uri: http://localhost:8082
               predicates:
                 - Path=/bills/**
             - id: deposit_service_route
-              uri: lb://deposit-service
+              uri: http://localhost:8083
               predicates:
                 - Path=/deposits/**
           httpclient:

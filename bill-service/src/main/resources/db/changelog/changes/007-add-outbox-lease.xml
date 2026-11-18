@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.21.xsd">
+
+    <changeSet id="007-add-outbox-lease" author="Kirill Shilets">
+
+        <comment>
+            The relay claims a message by stamping a lease, publishes outside any
+            database transaction, then records the outcome. The lease keeps a
+            crashed relay from leaving a row claimed forever.
+        </comment>
+
+        <addColumn tableName="outbox">
+            <column
+                    name="lease_expires_at"
+                    type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+
+        <sql>
+            CREATE INDEX idx_bill_outbox_lease
+                ON outbox (lease_expires_at)
+                WHERE status = 'PENDING';
+        </sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_bill_outbox_lease;</sql>
+            <dropColumn tableName="outbox" columnName="lease_expires_at"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

@@ -11,5 +11,8 @@
     <include file="db/changelog/changes/004-create-outbox-table.xml"/>
     <include file="db/changelog/changes/005-add-bill-version.xml"/>
     <include file="db/changelog/changes/006-add-next-attempt-at.xml"/>
+    <include file="db/changelog/changes/007-add-outbox-lease.xml"/>
+    <include file="db/changelog/changes/008-add-bill-owner-subject.xml"/>
+    <include file="db/changelog/changes/009-create-idempotency-keys.xml"/>
 
 </databaseChangeLog>

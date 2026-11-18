@@ -72,6 +72,14 @@ function readRuntimeBoolean(
 
 const environment = import.meta.env
 
+/**
+ * Demo sessions and the in-browser mock API exist only for local review. The
+ * flag is combined with the compile-time DEV constant so a production build
+ * evaluates it to false and the guarded code paths are eliminated
+ * instead of being shipped and merely left disabled at runtime.
+ */
+const developmentOnly = import.meta.env.DEV
+
 const defaults: RuntimeConfig = {
   keycloakUrl: environment.VITE_KEYCLOAK_URL ?? 'http://keycloak.localhost',
   keycloakRealm: environment.VITE_KEYCLOAK_REALM ?? 'bank-realm',
@@ -105,8 +113,12 @@ export const appConfig: RuntimeConfig = {
     RUNTIME_KEYS.gatewayUrl,
     defaults.gatewayUrl,
   ),
-  demoMode: readRuntimeBoolean(runtime, RUNTIME_KEYS.demoMode, defaults.demoMode),
-  mockApi: readRuntimeBoolean(runtime, RUNTIME_KEYS.mockApi, defaults.mockApi),
+  demoMode:
+    developmentOnly &&
+    readRuntimeBoolean(runtime, RUNTIME_KEYS.demoMode, defaults.demoMode),
+  mockApi:
+    developmentOnly &&
+    readRuntimeBoolean(runtime, RUNTIME_KEYS.mockApi, defaults.mockApi),
 }
 
 export function pick<T extends keyof RuntimeConfig>(
